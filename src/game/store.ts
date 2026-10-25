@@ -16,6 +16,9 @@ import {
   newlyUnlocked,
   packSupplies,
   playCard,
+  restAtCampfire,
+  forageAtCampfire,
+  restAtStall,
   startRun,
   stepEnemies,
   syncRoster,
@@ -69,6 +72,9 @@ interface GameStore {
   buySupply: (id: string) => void;
   buyRelic: (id: string) => void;
   leaveShop: () => void;
+  restAtStall: () => void;
+  restAtCampfire: () => void;
+  forageAtCampfire: () => void;
   goDeeper: () => void;
   pickKeepsake: (heroId: string, relicId: string) => void;
   returnToCamp: () => void;
@@ -334,6 +340,21 @@ export const useGame = create<GameStore>((set, get) => {
       const run = get().run;
       if (!run) return;
       commit(leaveShop(run));
+    },
+    restAtStall: () => {
+      const run = get().run;
+      if (!run) return;
+      commit(restAtStall(run));
+    },
+    restAtCampfire: () => {
+      const run = get().run;
+      if (!run) return;
+      commit(restAtCampfire(run));
+    },
+    forageAtCampfire: () => {
+      const run = get().run;
+      if (!run) return;
+      commit(forageAtCampfire(run));
     },
     goDeeper: () => {
       const run = get().run;

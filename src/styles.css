@@ -59,24 +59,28 @@
   width: min(100%, 72rem);
   margin-inline: auto;
   overflow: hidden;
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .scroll-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  padding-bottom: 1.25rem;
 }
 
 .mast,
 .topbar {
-  padding: 1.25rem 1rem 0.5rem;
+  padding: calc(1.25rem + env(safe-area-inset-top, 0px)) max(1rem, env(safe-area-inset-right, 0px)) 0.5rem
+    max(1rem, env(safe-area-inset-left, 0px));
 }
 
 .kicker {
   color: var(--color-gold);
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -207,7 +211,7 @@ button.playing-card {
 .seat-no,
 .role {
   color: var(--color-gold);
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: 700;
@@ -429,7 +433,8 @@ button.playing-card {
 
 .action-bar {
   flex: none;
-  padding: 0.75rem 1rem calc(0.85rem + env(safe-area-inset-bottom, 0px));
+  padding: 0.75rem max(1rem, env(safe-area-inset-right, 0px)) calc(0.85rem + env(safe-area-inset-bottom, 0px))
+    max(1rem, env(safe-area-inset-left, 0px));
   background: color-mix(in oklab, var(--color-bg) 92%, transparent);
   border-top: 1px solid var(--color-line);
   display: flex;
@@ -459,7 +464,7 @@ button.playing-card {
 }
 
 .phase-track span {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-muted);
@@ -608,7 +613,7 @@ button.playing-card {
 }
 
 .card-kicker {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   font-weight: 700;
@@ -758,18 +763,75 @@ button.playing-card {
   background: color-mix(in oklab, var(--color-bg) 78%, transparent);
   display: grid;
   place-items: end center;
-  padding: 0.75rem;
+  padding: 0;
 }
 
 .sheet {
   width: min(40rem, 100%);
-  max-height: min(88dvh, 46rem);
-  overflow: auto;
+  max-height: 90dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface);
   color: var(--color-fg);
-  border-radius: 1.1rem 1.1rem 0.8rem 0.8rem;
+  border-radius: 1.25rem 1.25rem 0 0;
+  border: 1px solid #9b5de5;
+  border-bottom: 0;
+  padding: 0;
+  animation: sheet-rise 220ms ease-out;
+}
+
+.sheet-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex: none;
+  padding: 0.85rem 0.75rem 0.7rem 1rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-line);
+}
+
+.sheet-head h2 {
+  margin: 0;
+}
+
+.sheet-head .kicker {
+  margin: 0 0 0.15rem;
+}
+
+.sheet-x {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
   border: 1px solid var(--color-line);
-  padding: 1.1rem 1rem 1.25rem;
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.sheet-body {
+  overflow: auto;
+  min-height: 0;
+  padding: 0.85rem 1rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+@keyframes sheet-rise {
+  from {
+    transform: translateY(16px);
+  }
+  to {
+    transform: none;
+  }
 }
 
 .sheet h2 {
@@ -1024,7 +1086,12 @@ button.playing-card {
   .stand.is-boss,
   .stand.is-boss img,
   .threat.is-boss,
-  .stand.is-striking img {
+  .stand.is-striking img,
+  .stagger-flash,
+  .sheet,
+  .stand.is-actor,
+  .menu-toggle,
+  .intent-line.is-hidden {
     animation: none;
     transition: none;
   }
@@ -1147,7 +1214,7 @@ button.playing-card {
   margin: 0;
   padding-left: 0.45rem;
   font-family: var(--font-display);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--color-gold-2);
@@ -1164,7 +1231,8 @@ button.playing-card {
 }
 
 .foe-line.is-loot-row {
-  align-items: stretch;
+  align-items: center;
+  justify-content: center;
   padding: 2.15rem 0.35rem 0.4rem;
   gap: 0.4rem;
 }
@@ -1176,11 +1244,77 @@ button.playing-card {
 }
 
 .stand.is-loot.is-rare {
-  border-color: color-mix(in oklab, var(--color-gold) 70%, transparent);
+  border-color: var(--color-gold);
+  box-shadow:
+    0 0 0 2px var(--color-gold),
+    0 10px 22px rgb(255 176 0 / 0.28);
 }
 
 .stand.is-loot.is-mythic {
-  border-color: color-mix(in oklab, var(--color-blood) 80%, var(--color-gold));
+  border-color: color-mix(in oklab, var(--color-blood) 75%, var(--color-gold));
+  box-shadow:
+    0 0 0 2px var(--color-blood),
+    0 0 0 4px rgb(255 176 0 / 0.35),
+    0 10px 22px rgb(230 57 70 / 0.32);
+}
+
+.stand.is-loot::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  left: 50%;
+  top: 18%;
+  width: 72%;
+  height: 38%;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgb(155 93 229 / 0.55), transparent 70%);
+  pointer-events: none;
+}
+
+.stand.is-loot.is-rare::before {
+  background: radial-gradient(circle, rgb(255 176 0 / 0.62), transparent 70%);
+}
+
+.stand.is-loot.is-mythic::before {
+  background: radial-gradient(circle, rgb(230 57 70 / 0.55), rgb(255 176 0 / 0.35) 42%, transparent 72%);
+}
+
+.stand.is-loot.is-selected {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.campfire-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  min-height: 0;
+}
+
+.campfire-art {
+  width: 100%;
+  height: clamp(140px, 28vh, 240px);
+  object-fit: cover;
+  border-radius: 0.8rem;
+  border: 2px solid var(--color-line);
+}
+
+.campfire-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.campfire-choices .btn {
+  min-height: 44px;
+}
+
+.rest-fire {
+  flex: none;
+  width: 100%;
+  min-height: 44px;
 }
 
 .ware-items .stand.is-loot,
@@ -1196,20 +1330,45 @@ button.playing-card {
 .foe-line .stand.is-loot img,
 .foe-line .stand.is-loot .stand-fallback {
   position: relative;
+  z-index: 1;
   inset: auto;
   top: auto;
   right: auto;
   bottom: auto;
   left: auto;
-  flex: 1 1 0;
-  min-height: 0;
-  height: 0;
+  flex: 0 0 auto;
   width: 100%;
+  height: clamp(96px, 18vh, 120px);
+  min-height: 72px;
   max-height: none;
   object-fit: contain;
   object-position: center center;
-  padding: 0.45rem 0.5rem 0.2rem;
+  padding: 0.35rem 0.4rem 0.15rem;
   animation: none;
+}
+
+.foe-line.is-loot-row .stand.is-loot {
+  height: auto;
+  max-height: 100%;
+  align-self: center;
+  overflow: hidden;
+}
+
+.foe-line.is-loot-row .stand-plate .chip-name,
+.foe-line.is-loot-row .stand-plate .role,
+.foe-line.is-loot-row .stand-plate .hint {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: unset;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  line-clamp: unset;
+}
+
+.foe-line.is-loot-row .stand-plate .hint {
+  font-size: 0.75rem;
+  line-height: 1.35;
 }
 
 .stand.is-loot .stand-plate {
@@ -1329,8 +1488,98 @@ button.stand {
 .stand-plate .chip-name,
 .stand-plate .role {
   overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  text-overflow: unset;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.hp-readout {
+  width: 100%;
+  margin-top: 0.12rem;
+}
+
+.intent-line,
+.intent-arrow {
+  display: block;
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.25;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  -webkit-line-clamp: unset;
+  -webkit-box-orient: unset;
+  line-clamp: unset;
+}
+
+.intent-arrow {
+  color: var(--color-gold-2);
+}
+
+.intent-line.is-hidden {
+  color: #d7c4ff;
+  text-shadow: 0 0 8px #9b5de5;
+  animation: intent-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes intent-shimmer {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.threat-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.threat-badge,
+.hunted-mark {
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 0 0.28rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
   white-space: nowrap;
+}
+
+.threat-badge.foe-goblin { color: #7ae582; }
+.threat-badge.foe-bat { color: #c9c2f0; }
+.threat-badge.foe-slime { color: #b388ff; }
+.threat-badge.foe-bone { color: #fff8ec; }
+.threat-badge.foe-cultist { color: #e63946; }
+.threat-badge.foe-spider { color: #8ea0ff; }
+.threat-badge.foe-ogre { color: #ff9f1c; }
+.threat-badge.foe-wraith { color: #d7c4ff; }
+.threat-badge.foe-hunter { color: #ff6b6b; }
+.threat-badge.foe-warden { color: #ffd23f; }
+.threat-badge.foe-hydra { color: #7ae582; }
+.threat-badge.foe-priestess { color: #f15bb5; }
+.threat-badge.foe-king { color: #ffb000; }
+
+.hunted-mark {
+  color: #e63946;
+  font-weight: 700;
+}
+
+.hero-line .stand.is-aimed,
+.foe-line .stand.is-aiming {
+  outline: 2px solid var(--color-gold-2);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 1px var(--color-gold),
+    0 0 12px var(--color-gold);
+}
+
+.hero-line .stand.is-hunted {
+  box-shadow: inset 0 0 0 2px #e63946;
 }
 
 .stand-plate .hint {
@@ -1349,7 +1598,7 @@ button.stand {
 
 .stand-plate .hint,
 .stand-plate .role {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   margin: 0;
 }
 
@@ -1390,7 +1639,7 @@ button.stand {
   background: var(--color-gold);
   color: var(--color-ink);
   font-family: var(--font-display);
-  font-size: 0.62rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -1408,7 +1657,7 @@ button.stand {
 
 .turn-banner .turn-seat,
 .turn-banner .turn-note {
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1471,6 +1720,32 @@ button.stand {
     opacity: 1;
   }
   to {
+    opacity: 0;
+  }
+}
+
+.stagger-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, rgb(155 93 229 / 0.9), rgb(255 176 0 / 0.55) 46%, transparent 72%);
+  animation: stagger-flash 700ms ease-out;
+}
+
+.stand.is-staggered img {
+  filter:
+    drop-shadow(0 0 12px #9b5de5)
+    drop-shadow(0 0 6px #ffb000)
+    drop-shadow(0 14px 10px rgb(27 26 58 / 0.45));
+}
+
+@keyframes stagger-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
     opacity: 0;
   }
 }
@@ -1735,5 +2010,1061 @@ button.stand {
   }
   100% {
     transform: scale(1, 1);
+  }
+}
+
+.menu-toggle,
+.buy-chip,
+.phase-dot {
+  display: none;
+}
+
+.menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.menu-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 0 0.9rem;
+  border-radius: 0.7rem;
+  border: 2px solid #9b5de5;
+  background: var(--color-surface-2);
+  color: var(--color-fg);
+  font-weight: 650;
+  font-size: 1rem;
+  text-align: left;
+}
+
+.mast-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 44px;
+}
+
+.keepsake {
+  padding-bottom: 1.25rem;
+}
+
+.sheet-head h2,
+.menu-sheet h2 {
+  font-size: 1.35rem;
+}
+
+@media (max-width: 839px), (max-height: 500px), (pointer: coarse) {
+  .btn-tiny,
+  .gear-tabs button,
+  .mast-btn,
+  .sheet-x,
+  .menu-toggle {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  .inline-actions,
+  .mast-actions,
+  .menu-list,
+  .ware-items,
+  .door-grid {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 839px), (max-height: 500px) and (orientation: landscape) {
+  .topbar {
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.45rem;
+    max-height: 72px;
+    padding-top: calc(0.2rem + env(safe-area-inset-top, 0px));
+    padding-bottom: 0.2rem;
+  }
+
+  .topbar-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .topbar .kicker,
+  .topbar .stat {
+    margin: 0;
+    white-space: nowrap;
+  }
+
+  .seal-count,
+  .topbar-actions {
+    display: none;
+  }
+
+  .menu-toggle {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-top: 0;
+    padding: 0;
+    font-size: 1.35rem;
+    line-height: 1;
+  }
+
+  .phase-track {
+    flex-wrap: nowrap;
+    gap: 6px;
+    margin: 0;
+  }
+
+  .phase-track span {
+    position: relative;
+    border: 0;
+    padding: 0;
+  }
+
+  .phase-dot {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: var(--color-surface-2);
+    box-shadow: inset 0 0 0 1px var(--color-line);
+  }
+
+  .phase-track span.is-on .phase-dot {
+    background: var(--color-gold);
+    box-shadow: none;
+  }
+
+  .phase-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+}
+
+@media (max-width: 419px) {
+  .phase-track {
+    display: none;
+  }
+}
+
+@media (max-width: 839px) {
+  .mast-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 0.75rem;
+  }
+
+  .mast-btn {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+    white-space: nowrap;
+  }
+
+  .seat[class*="class-"] .name {
+    display: block;
+    width: 100%;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+    padding: 0;
+    color: var(--color-parchment);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .door-art {
+    height: 96px;
+  }
+
+  .door-rumor,
+  .door-extra {
+    display: none;
+  }
+
+  .door-body {
+    padding: 0.4rem 0.65rem 0.5rem;
+    gap: 0.2rem;
+  }
+
+  .door-body .name {
+    font-size: 1.05rem;
+  }
+
+  .scene .stage > .stage-title {
+    margin: 0.4rem 1rem 0;
+    font-size: 1.05rem;
+  }
+
+  .scene .door-grid {
+    margin-top: 0.45rem;
+    margin-bottom: 0.45rem;
+  }
+
+  .card-dock {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .card-dock .h-scroll.deal {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.5rem;
+    align-items: stretch;
+    overflow: visible;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  .card-dock .deal .playing-card {
+    width: calc((100vw - 2rem - 1rem) / 3);
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    flex: none;
+    padding: 0.4rem 0.35rem 0.45rem;
+  }
+
+  .card-dock .card-power,
+  .card-power {
+    font-size: 1.1rem;
+  }
+
+  .card-dock .card-name {
+    font-size: 0.95rem;
+    margin-top: 0.2rem;
+  }
+
+  .card-dock .card-text {
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+  }
+
+  .hand-hint {
+    display: none;
+  }
+
+  .pick-bar {
+    flex-wrap: nowrap;
+    align-items: center;
+    margin-top: 0;
+  }
+
+  .pick-bar .hint {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .pick-bar .btn {
+    width: auto;
+    flex: none;
+  }
+
+  .action-bar > .btn {
+    width: 100%;
+  }
+
+  .playing-card.is-selected {
+    transform: none;
+  }
+
+  .battlefield.has-upper:not(:has(.is-stall)) {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 0;
+  }
+
+  .battlefield.has-upper:has(> .is-loot-row) {
+    justify-content: flex-start;
+  }
+
+  .battlefield.has-upper > .foe-line.is-loot-row {
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding: 1.6rem 0.3rem 0.35rem;
+  }
+
+  .scene-caption {
+    left: 50%;
+    right: auto;
+    top: 0.35rem;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100% - 1rem);
+    margin: 0;
+    padding: 0.15rem 0.7rem;
+    border-radius: 999px;
+    border: 1px solid color-mix(in oklab, var(--color-gold) 55%, transparent);
+    background: rgb(27 26 58 / 0.62);
+    color: var(--color-parchment);
+    font-size: 0.75rem;
+    line-height: 1.3;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .battlefield.has-upper:not(:has(.is-stall)) > .foe-line:not(.is-loot-row) {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    align-items: stretch;
+    padding: 6px 0.1rem 0;
+    overflow: hidden;
+  }
+
+  .battlefield.has-upper:not(:has(.is-stall)) > .hero-line.is-below {
+    flex: 0 0 auto;
+    height: auto;
+    max-height: none;
+    margin-top: 0;
+    padding-top: 4px;
+    border-top: 0;
+    background: none;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .hero-line:not(.is-below) {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 78%) auto;
+    grid-template-columns: minmax(0, 1fr);
+    align-self: stretch;
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    max-width: none;
+    justify-items: stretch;
+  }
+
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand.is-big:not(.is-boss) {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 90%) auto;
+  }
+
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand.is-boss {
+    grid-template-rows: 0px minmax(0, 1fr) auto;
+  }
+
+  .foe-line[data-foes="3"] .stand,
+  .foe-line[data-foes="4"] .stand,
+  .foe-line[data-foes="5"] .stand,
+  .foe-line[data-foes="3"] .stand.is-boss,
+  .foe-line[data-foes="4"] .stand.is-boss,
+  .foe-line[data-foes="5"] .stand.is-boss,
+  .foe-line[data-foes="3"] .stand.is-big,
+  .foe-line[data-foes="4"] .stand.is-big,
+  .foe-line[data-foes="5"] .stand.is-big {
+    flex: 1 1 0;
+    max-width: none;
+  }
+
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand:not(.is-loot) img,
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand:not(.is-loot) .stand-fallback {
+    position: relative;
+    inset: auto;
+    grid-row: 2;
+    grid-column: 1;
+    align-self: end;
+    justify-self: center;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    min-height: 0;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .battlefield .foe-line:not(.is-stall):not(.is-loot-row) .stand-plate {
+    grid-row: 3;
+    grid-column: 1;
+  }
+
+  .battlefield .hero-line .stand {
+    height: auto;
+    min-height: 0;
+    min-width: 0;
+    max-width: none;
+    justify-content: flex-end;
+  }
+
+  .battlefield .hero-line .stand img,
+  .battlefield .hero-line .stand-fallback {
+    position: relative;
+    inset: auto;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    flex: 0 0 auto;
+    align-self: center;
+    width: auto;
+    max-width: 100%;
+    height: clamp(110px, 32vw, 130px);
+    min-height: 0;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .battlefield .hero-line .stand.is-minion img,
+  .battlefield .hero-line .stand.is-minion .stand-fallback {
+    height: 84px;
+    max-height: 84px;
+  }
+
+  .foe-line:not(.is-stall) .stand-plate,
+  .hero-line .stand-plate {
+    flex: none;
+    width: calc(100% - 2px);
+    margin: 0 1px 1px;
+    padding: 0.12rem 0.15rem 0.2rem;
+    border-radius: 0.45rem;
+    background: color-mix(in oklab, var(--color-bg) 90%, transparent);
+  }
+
+  .hero-line .stand-plate {
+    border-top: 2px solid color-mix(in oklab, var(--color-gold) 62%, transparent);
+    border-radius: 0 0 0.45rem 0.45rem;
+  }
+
+  .stand-plate .plate-vitals,
+  .stand-plate .mana {
+    display: none;
+  }
+
+  .stand-plate .hp {
+    height: 4px;
+    margin-top: 2px;
+  }
+
+  .foe-line .stand-plate .form-pips {
+    margin-top: 1px;
+    gap: 0.2rem;
+  }
+
+  .foe-line.is-loot-row .stand-plate .chip-name,
+  .foe-line.is-loot-row .stand-plate .role,
+  .foe-line.is-loot-row .stand-plate .hint,
+  .ware-items .stand-plate .chip-name,
+  .ware-items .stand-plate .role,
+  .ware-items .ware-desc,
+  .ware-items .stand-plate.is-wares .hint {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    line-clamp: unset;
+  }
+
+  .battlefield.has-upper > .foe-line.is-loot-row.is-compare {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: auto;
+    gap: 0.4rem;
+  }
+
+  .foe-line.is-loot-row.is-compare .stand.is-loot {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr);
+    align-items: center;
+    width: 100%;
+    height: auto;
+    max-height: none;
+    min-height: 72px;
+    column-gap: 0.4rem;
+    padding: 0.35rem;
+    text-align: left;
+  }
+
+  .foe-line.is-loot-row.is-compare .stand.is-loot img,
+  .foe-line.is-loot-row.is-compare .stand.is-loot .stand-fallback {
+    width: 64px;
+    height: 64px;
+    min-height: 56px;
+    flex: none;
+  }
+
+  .foe-line.is-loot-row.is-compare .stand-plate .hint,
+  .foe-line.is-loot-row.is-compare .stand-plate .chip-name,
+  .foe-line.is-loot-row.is-compare .stand-plate .role {
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    overflow: visible;
+  }
+
+  .inline-actions .btn {
+    min-height: 44px;
+  }
+
+  .hp-num,
+  .stand-plate .chip-name,
+  .stand-plate .hint,
+  .ware-desc {
+    font-size: 0.75rem;
+  }
+
+  .foe-line .stand-plate .hint {
+    -webkit-line-clamp: 1;
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+
+  .foe-line .stand-plate .intent-line,
+  .foe-line .stand-plate .intent-arrow,
+  .threat-badge,
+  .hunted-mark {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    line-clamp: unset;
+    font-size: 12px;
+    line-height: 1.25;
+  }
+
+  .threat-badge,
+  .hunted-mark {
+    display: inline-flex;
+  }
+
+  .foe-line .stand-plate .chip-name,
+  .hero-line .stand-plate .chip-name {
+    font-size: 0.75rem;
+    line-height: 1.15;
+  }
+
+  .hero-line .stand[class*="class-"] .chip-name {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    border-radius: 0.35rem;
+    padding: 0.06rem 0.15rem;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  .hero-line .stand-plate .hint {
+    display: block;
+    margin: 0;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    line-clamp: unset;
+    font-size: 0.75rem;
+    line-height: 1.2;
+  }
+
+  .hero-line .stand-plate .btn {
+    min-height: 44px;
+    margin-top: 0.2rem;
+    padding: 0.2rem 0.25rem;
+    font-size: 0.75rem;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
+  .hero-line .turn-flag {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .hero-line .stand.is-actor {
+    background: transparent;
+    box-shadow:
+      0 0 0 2px var(--color-gold),
+      0 0 14px var(--color-gold);
+    outline: 2px solid var(--color-gold-2);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
+    animation: actor-glow 1.6s ease-in-out infinite;
+  }
+
+  .scene .card-dock {
+    gap: 0.35rem;
+    padding-top: 0.35rem;
+    padding-bottom: calc(0.45rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .scene .card-dock > .hint {
+    margin: 0;
+    font-size: 0.75rem;
+    line-height: 1.3;
+  }
+
+  .scene .turn-banner {
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0.22rem 0.5rem;
+    border-radius: 0.5rem;
+    gap: 0.2rem 0.4rem;
+  }
+
+  .scene .turn-banner .turn-name {
+    font-size: 1rem;
+  }
+
+  .card-dock .h-scroll:not(.deal) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+    gap: 0.4rem;
+    overflow: visible;
+    padding-bottom: 0;
+    scroll-snap-type: none;
+  }
+
+  .card-dock .h-scroll:not(.deal) .playing-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    flex: none;
+    padding: 0.4rem 0.35rem 0.45rem;
+  }
+
+  .battlefield.has-upper:has(.is-stall) {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .battlefield.has-upper:has(.is-stall) > .hero-line {
+    flex: none;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .battlefield.has-upper:has(.is-stall) > .hero-line .stand img,
+  .battlefield.has-upper:has(.is-stall) > .hero-line .stand-fallback {
+    height: 72px;
+  }
+
+  .foe-line.is-stall {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    padding: 0.55rem 0.5rem 0.35rem;
+    gap: 0.45rem;
+  }
+
+  .ware-band {
+    flex: none;
+    gap: 0.35rem;
+  }
+
+  .ware-items {
+    flex-direction: column;
+    overflow: visible;
+    align-items: stretch;
+    padding-inline: 0;
+  }
+
+  .ware-items .stand.is-loot {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    min-height: 64px;
+    min-width: 0;
+    max-width: none;
+    padding: 0.4rem;
+    text-align: left;
+    justify-content: stretch;
+    column-gap: 0.45rem;
+  }
+
+  .ware-items .stand.is-loot img,
+  .ware-items .stand.is-loot .stand-fallback {
+    position: relative;
+    inset: auto;
+    top: auto;
+    grid-column: 1;
+    flex: none;
+    width: 64px;
+    height: 64px;
+    min-width: 56px;
+    min-height: 56px;
+    object-fit: contain;
+    object-position: center;
+    padding: 0;
+  }
+
+  .ware-items .stand.is-loot::before {
+    left: 0.4rem;
+    top: 50%;
+    width: 64px;
+    height: 64px;
+    transform: translateY(-50%);
+  }
+
+  .ware-items .stand-plate.is-wares {
+    grid-column: 2;
+    flex: 1 1 auto;
+    min-width: 0;
+    text-align: left;
+    padding: 0;
+    background: transparent;
+  }
+
+  .ware-items .buy-chip {
+    grid-column: 3;
+    align-self: center;
+    margin-top: 0;
+  }
+
+  .ware-items .stand-plate .chip-name,
+  .ware-items .ware-desc {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    display: block;
+    -webkit-line-clamp: unset;
+  }
+
+  .ware-items .price-chip {
+    display: inline-flex;
+    width: fit-content;
+    margin: 0.15rem 0;
+    padding: 0.05rem 0.45rem;
+    border-radius: 999px;
+    background: var(--color-gold);
+    color: var(--color-ink);
+  }
+
+  .buy-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    margin-top: 0.35rem;
+    padding: 0 0.85rem;
+    border-radius: 0.45rem;
+    background: var(--color-gold);
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+}
+
+@media (max-height: 500px) and (orientation: landscape) {
+  .scene.screen {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .scene .topbar {
+    grid-column: 1 / -1;
+  }
+
+  .scene .stage {
+    grid-column: 1;
+    grid-row: 2;
+    min-height: 0;
+    overflow: auto;
+  }
+
+  .scene .action-bar {
+    grid-column: 2;
+    grid-row: 2;
+    min-height: 0;
+    max-height: none;
+    overflow: auto;
+    border-top: 0;
+    border-left: 1px solid var(--color-line);
+  }
+
+  .door-grid,
+  .scene .door-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    margin-top: 0.35rem;
+  }
+
+  .door-art {
+    height: 96px;
+  }
+
+  .door-rumor,
+  .door-extra,
+  .hand-hint {
+    display: none;
+  }
+
+  .battlefield,
+  .battlefield.has-upper,
+  .battlefield.has-upper:has(.is-stall) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    height: auto;
+    justify-content: flex-end;
+  }
+
+  .battlefield:has(.is-stall) {
+    justify-content: flex-start;
+    overflow: auto;
+  }
+
+  .foe-line:not(.is-stall):not(.is-loot-row) {
+    flex: 1.2 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    padding-top: 1.15rem;
+  }
+
+  .hero-line,
+  .hero-line.is-below {
+    flex: 1 1 0;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    padding-top: 0.15rem;
+  }
+
+  .battlefield:has(.is-stall) > .hero-line {
+    flex: none;
+    height: 8.5rem;
+    max-height: 42%;
+    overflow: hidden;
+  }
+
+  .foe-line:not(.is-stall):not(.is-loot-row) .stand,
+  .hero-line .stand {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .foe-line:not(.is-stall):not(.is-loot-row) .stand img,
+  .foe-line:not(.is-stall):not(.is-loot-row) .stand-fallback,
+  .hero-line .stand img,
+  .hero-line .stand-fallback {
+    position: relative;
+    inset: auto;
+    top: auto;
+    bottom: auto;
+    flex: 1 1 auto;
+    width: 100%;
+    height: 0;
+    min-height: 0;
+    object-fit: contain;
+    object-position: center bottom;
+  }
+
+  .foe-line:not(.is-stall) .stand-plate,
+  .hero-line .stand-plate {
+    flex: none;
+    padding: 0.08rem 0.15rem 0.15rem;
+    background: color-mix(in oklab, var(--color-bg) 90%, transparent);
+    border-radius: 0.45rem;
+  }
+
+  .stand-plate .plate-vitals,
+  .stand-plate .mana,
+  .hero-line .turn-flag {
+    display: none;
+  }
+
+  .hero-line .stand.is-actor {
+    background: transparent;
+    outline: 2px solid var(--color-gold-2);
+    outline-offset: 2px;
+    box-shadow:
+      0 0 0 2px var(--color-gold),
+      0 0 12px var(--color-gold);
+    border-radius: 0.65rem;
+  }
+
+  .ware-items {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    align-items: stretch;
+  }
+
+  .ware-items .stand.is-loot {
+    display: grid;
+    grid-template-columns: 64px minmax(0, 1fr) auto;
+    align-items: center;
+    width: 100%;
+    height: auto;
+    min-height: 64px;
+    min-width: 0;
+    max-width: none;
+    padding: 0.4rem;
+    text-align: left;
+    column-gap: 0.4rem;
+  }
+
+  .ware-items .stand.is-loot img,
+  .ware-items .stand.is-loot .stand-fallback {
+    position: relative;
+    inset: auto;
+    grid-column: 1;
+    flex: none;
+    width: 64px;
+    height: 64px;
+    min-height: 56px;
+    object-fit: contain;
+    padding: 0;
+  }
+
+  .ware-items .buy-chip {
+    grid-column: 3;
+    margin-top: 0;
+  }
+
+  .ware-items .ware-desc {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+    white-space: normal;
+  }
+
+  .buy-chip {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    margin-top: 0.25rem;
+    padding: 0 0.7rem;
+    border-radius: 0.4rem;
+    background: var(--color-gold);
+    color: var(--color-ink);
+    font-weight: 700;
+  }
+
+  .card-dock {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .card-dock .h-scroll.deal {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    gap: 0.35rem;
+    scroll-snap-type: none;
+  }
+
+  .card-dock .deal .playing-card {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    height: auto;
+    padding: 0.3rem 0.3rem 0.35rem;
+  }
+
+  .card-dock .card-power {
+    font-size: 1.1rem;
+  }
+
+  .card-dock .card-name {
+    font-size: 0.95rem;
+  }
+
+  .card-dock .card-text {
+    font-size: 0.8rem;
+  }
+
+  .action-bar > .btn {
+    width: 100%;
+  }
+}
+
+.relic-detail-art {
+  display: block;
+  width: min(220px, 70%);
+  height: clamp(140px, 32vh, 220px);
+  margin: 0 auto 0.75rem;
+  object-fit: contain;
+  filter: drop-shadow(0 0 16px rgb(155 93 229 / 0.55));
+}
+
+.relic-detail.is-rare .relic-detail-art {
+  filter: drop-shadow(0 0 16px rgb(255 176 0 / 0.7));
+}
+
+.relic-detail.is-mythic .relic-detail-art {
+  filter: drop-shadow(0 0 16px rgb(230 57 70 / 0.65)) drop-shadow(0 0 8px rgb(255 176 0 / 0.45));
+}
+
+@keyframes actor-glow {
+  50% {
+    box-shadow:
+      0 0 0 2px var(--color-gold-2),
+      0 0 18px var(--color-gold);
+  }
+}
+
+@media (max-width: 839px), (max-height: 500px) and (orientation: landscape) {
+  .ware-items .stand-plate.is-wares .hint,
+  .ware-items .ware-desc {
+    display: block;
+    overflow: visible;
+    white-space: normal;
+    text-overflow: unset;
+    -webkit-line-clamp: unset;
+    -webkit-box-orient: unset;
+    line-clamp: unset;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .hero-line .stand.is-actor,
+  .menu-toggle,
+  .intent-line.is-hidden {
+    animation: none;
   }
 }

@@ -19,6 +19,7 @@ import {
   computeStats,
   deckFor,
   foePlan,
+  isCampHealSupply,
   relicCost,
   relicIdsOf,
   xpThreshold,
@@ -79,6 +80,92 @@ function clone(run: Run): Run {
 
 function livingHeroes(run: Run): HeroState[] {
   return run.party.filter((h) => !h.down && h.hp > 0);
+}
+
+function foeCleaves(enemy: EnemyState): boolean {
+  return enemy.alwaysCleave || (enemy.raging && enemy.rageCleave);
+}
+
+/** Who this foe will strike: a hero id, "all", or null if it will not strike. */
+export function chooseIntentTarget(run: Run, enemy: EnemyState): string | null {
+  if (enemy.hp <= 0 || enemy.skip || enemy.staggered) return null;
+  if (foeCleaves(enemy)) return "all";
+  const living = livingHeroes(run);
+  if (living.length === 0) return null;
+  const taunt = living.find((h) => h.id === run.tauntHeroId);
+  if (taunt) return taunt.id;
+  if ((enemy.intent ?? "full") === "hunt") {
+    return living.reduce((low, hero) => (hero.hp < low.hp ? hero : low)).id;
+  }
+  const weights = living.map((h) => 1.2 - h.hp / Math.max(1, h.maxHp));
+  let r = roll(run) * weights.reduce((a, b) => a + b, 0);
+  let target = living[0]!;
+  for (let i = 0; i < living.length; i++) {
+    r -= weights[i]!;
+    if (r <= 0) {
+      target = living[i]!;
+      break;
+    }
+  }
+  return target.id;
+}
+
+export function planIntents(run: Run) {
+  for (const enemy of run.enemies) enemy.intentTargetId = chooseIntentTarget(run, enemy);
+}
+
+function redirectToTaunt(run: Run) {
+  if (!run.tauntHeroId) return;
+  for (const enemy of run.enemies) {
+    if (enemy.hp <= 0 || enemy.skip || enemy.staggered) {
+      enemy.intentTargetId = null;
+      continue;
+    }
+    enemy.intentTargetId = foeCleaves(enemy) ? "all" : run.tauntHeroId;
+  }
+}
+
+export function revealsTarget(enemy: EnemyState): boolean {
+  if (enemy.hp <= 0 || enemy.skip || enemy.staggered) return false;
+  const mode = enemy.intent ?? "full";
+  if (mode === "hidden" || mode === "amount") return false;
+  if (enemy.boss && enemy.form === enemy.forms) return false;
+  return true;
+}
+
+export function intentArrow(enemy: EnemyState, party: { id: string; name: string }[]): string | null {
+  if (enemy.hp <= 0 || enemy.skip || enemy.staggered) return null;
+  const mode = enemy.intent ?? "full";
+  if (mode === "hidden") return null;
+  if (mode === "amount" || (enemy.boss && enemy.form === enemy.forms)) return "→ ?";
+  if (enemy.intentTargetId === "all") return "→ All";
+  const hero = party.find((h) => h.id === enemy.intentTargetId);
+  return hero ? `→ ${hero.name}` : "→ ?";
+}
+
+export function strikePreview(run: Run, enemy: EnemyState): { damage: number; poison: number } {
+  const atk = effectiveAtk(run, enemy);
+  const each = foeCleaves(enemy) ? Math.max(1, Math.round(atk * 0.6)) : atk;
+  const swings = enemy.alwaysDouble || (enemy.raging && enemy.rageDouble) ? 2 : 1;
+  return { damage: each * swings, poison: Math.max(0, enemy.poisonOnHit) * swings };
+}
+
+export function incomingOn(run: Run, heroId: string): { uid: string; defId: string; damage: number; poison: number; hunt: boolean }[] {
+  const marks = [];
+  for (const enemy of run.enemies) {
+    if (!revealsTarget(enemy)) continue;
+    const hits = enemy.intentTargetId === "all" || enemy.intentTargetId === heroId;
+    if (!hits) continue;
+    const preview = strikePreview(run, enemy);
+    marks.push({
+      uid: enemy.uid,
+      defId: enemy.defId,
+      damage: preview.damage,
+      poison: preview.poison,
+      hunt: enemy.intent === "hunt",
+    });
+  }
+  return marks;
 }
 
 function livingEnemies(run: Run): EnemyState[] {
@@ -183,7 +270,8 @@ function drawIds(deck: string[], discard: string[], n: number, rnd: () => number
 
 function dealHand(run: Run, hero: HeroState) {
   const rnd = () => roll(run);
-  const got = drawIds(hero.deck, hero.discard, 3, rnd);
+  const extra = relicBuild(hero, run).handSize ?? 0;
+  const got = drawIds(hero.deck, hero.discard, 3 + extra, rnd);
   hero.deck = got.deck;
   hero.discard = got.discard;
   run.hand = got.ids.map((cardId) => ({ uid: nextUid(run, "c"), cardId }));
@@ -273,6 +361,7 @@ function chargeStore(run: Run, hero: HeroState, amount: number, events: GameEven
 
 function hurtHero(run: Run, hero: HeroState, amount: number, events: GameEvent[], ignoreBlock: boolean) {
   if (hero.down || amount <= 0) return;
+  const hpBefore = hero.hp;
   let incoming = amount;
   let weathered = 0;
   if (!ignoreBlock && hero.block > 0) {
@@ -297,7 +386,22 @@ function hurtHero(run: Run, hero: HeroState, amount: number, events: GameEvent[]
     shake: incoming >= 6,
     floater: { key: `hero:${hero.id}`, text: `−${incoming}`, kind: "dmg" },
   });
-  if (hero.hp <= 0) fellHero(run, hero, events);
+  if (hero.hp <= 0) {
+    fellHero(run, hero, events);
+    return;
+  }
+  maybeLowHpHeal(run, hero, hpBefore, events);
+}
+
+function maybeLowHpHeal(run: Run, hero: HeroState, hpBefore: number, events: GameEvent[]) {
+  if (hero.down || hero.hp <= 0 || hero.lowHpHealUsed) return;
+  const amount = relicBuild(hero, run).lowHpHeal ?? 0;
+  if (amount <= 0) return;
+  const half = hero.maxHp / 2;
+  if (hpBefore < half || hero.hp >= half) return;
+  hero.lowHpHealUsed = true;
+  healHero(hero, amount, events);
+  log(run, `${hero.name}'s bloodwell answers.`);
 }
 
 function noteBossDeath(run: Run, enemy: EnemyState, events: GameEvent[]) {
@@ -337,9 +441,14 @@ function damageEnemy(run: Run, enemy: EnemyState, amount: number, useArmor: bool
     const line = `${enemy.name} enters a rage.`;
     log(run, line);
     events.push({ banner: line, sfx: "rage", shake: true });
+    if (foeCleaves(enemy)) enemy.intentTargetId = "all";
   }
   enemy.atk = enemy.baseAtk + (enemy.raging ? enemy.rageBonus : 0);
   if (enemy.hp <= 0) {
+    if (enemy.formLock && enemy.form < enemy.forms) {
+      enemy.hp = 1;
+      return dealt;
+    }
     if (tryAscend(run, enemy, events)) return dealt;
     enemy.hp = 0;
     log(run, `${enemy.name} is defeated.`);
@@ -373,9 +482,13 @@ function strikeHero(run: Run, enemy: EnemyState, hero: HeroState, events: GameEv
     const lost = beforeHp - Math.max(0, target.hp);
     log(run, lost > 0 ? `${enemy.name} strikes ${target.name} for ${lost}.` : `${enemy.name}'s strike glances off ${target.name}.`);
     if (enemy.poisonOnHit && target.hp > 0 && !target.down && beforeHp > target.hp) {
-      target.poison += enemy.poisonOnHit;
-      log(run, `${target.name} is poisoned (${target.poison}).`);
-      events.push({ sfx: "poison" });
+      const room = Math.max(0, 6 - target.poison);
+      const gain = Math.min(enemy.poisonOnHit, room);
+      if (gain > 0) {
+        target.poison += gain;
+        log(run, `${target.name} is poisoned (${target.poison}).`);
+        events.push({ sfx: "poison" });
+      }
     }
   }
 }
@@ -438,9 +551,13 @@ function resolveEffects(run: Run, hero: HeroState, effects: Effect[], targetId: 
     } else if (effect.op === "block") {
       continue;
     } else if (effect.op === "heal") {
+      const bonus = relicBuild(hero, run).healBonus ?? 0;
       if (effect.self) healHero(hero, effect.amount, events);
       else if (effect.all) for (const t of livingHeroes(run)) healHero(t, effect.amount, events);
-      else if (ally && !ally.down) healHero(ally, effect.amount, events);
+      else if (ally && !ally.down) {
+        const extra = bonus > 0 && ally.id !== hero.id ? bonus : 0;
+        healHero(ally, effect.amount + extra, events);
+      }
     } else if (effect.op === "atk") {
       const targets = effect.all ? livingHeroes(run) : ally && !ally.down ? [ally] : [hero];
       for (const t of targets) {
@@ -471,10 +588,16 @@ function resolveEffects(run: Run, hero: HeroState, effects: Effect[], targetId: 
       events.push({ sfx: "poison", floater: { key: `enemy:${foe.uid}`, text: `P${foe.poison}`, kind: "buff" } });
     } else if (effect.op === "taunt") {
       run.tauntHeroId = hero.id;
+      redirectToTaunt(run);
       log(run, `${hero.name} demands every blow.`);
     } else if (effect.op === "skip" && foe && foe.hp > 0) {
-      foe.skip = true;
-      log(run, `${foe.name} will skip its next action.`);
+      if (foe.staggered) {
+        log(run, `${foe.name} is already staggered.`);
+      } else {
+        foe.skip = true;
+        foe.intentTargetId = null;
+        log(run, `${foe.name} will skip its next action.`);
+      }
     } else if (effect.op === "exhaust") {
       const count = exhaustHand.filter((c) => c.cardId !== "basic-strike").length;
       const block = effect.base + effect.each * count;
@@ -659,6 +782,7 @@ function minionsMayClear(run: Run, events: GameEvent[]): boolean {
 function startActor(run: Run, index: number, events: GameEvent[]) {
   const hero = run.party[index];
   if (!hero) return;
+  openAction(run);
   const extra = hero.extraPlay ? 1 : 0;
   hero.extraPlay = false;
   run.actorIndex = index;
@@ -717,6 +841,8 @@ function roomCleared(run: Run, events: GameEvent[]) {
     h.braced = false;
     h.freeSpell = false;
     h.freeSpellUsed = false;
+    const mend = relicBuild(h, run).postFightHeal ?? 0;
+    if (mend > 0 && !h.down) healHero(h, mend, events);
   }
   const odds = run.activeDoor?.odds;
   if (!odds) {
@@ -756,6 +882,7 @@ function endOfEnemyPhase(run: Run, events: GameEvent[]): StepResult {
   run.prepSupplyUsed = false;
   run.phase = "prep";
   run.hand = [];
+  planIntents(run);
   let restored = 0;
   for (const hero of run.party) {
     if (hero.down || hero.maxMana <= 0 || hero.mana >= hero.maxMana) continue;
@@ -776,8 +903,12 @@ function partyScale(run: Run, base: number, kind: "hp" | "atk"): number {
   return scaleNumber(base, party, run.depth, avg, kind);
 }
 
+function openAction(run: Run) {
+  for (const enemy of run.enemies) enemy.formLock = false;
+}
+
 function tryAscend(run: Run, enemy: EnemyState, events: GameEvent[]): boolean {
-  if (!enemy.boss || enemy.form >= enemy.forms) return false;
+  if (!enemy.boss || enemy.form >= enemy.forms || enemy.formLock) return false;
   const shift = MONSTERS[enemy.defId]?.shifts?.[enemy.form - 1];
   if (!shift) return false;
   enemy.form += 1;
@@ -799,15 +930,18 @@ function tryAscend(run: Run, enemy: EnemyState, events: GameEvent[]): boolean {
   enemy.poison = 0;
   enemy.bleed = 0;
   enemy.bleedTicked = false;
-  enemy.skip = false;
+  enemy.skip = true;
+  enemy.staggered = true;
+  enemy.formLock = true;
+  enemy.intentTargetId = null;
   enemy.blurb = shift.line;
-  const banner = `${enemy.name} returns at full health — ${shift.form}.`;
+  const banner = `${enemy.name} is STAGGERED! ${shift.form} — the party strikes first.`;
   log(run, `${banner} ${shift.line}`);
   events.push({
     banner,
     sfx: "rage",
     shake: true,
-    floater: { key: `enemy:${enemy.uid}`, text: shift.form, kind: "buff" },
+    floater: { key: `enemy:${enemy.uid}`, text: "Staggered", kind: "buff" },
   });
   return true;
 }
@@ -861,6 +995,10 @@ function spawn(run: Run, defId: string): EnemyState {
     alwaysDouble: false,
     boss,
     final: def.tier === "final",
+    staggered: false,
+    formLock: false,
+    intent: def.intent ?? "full",
+    intentTargetId: null,
   };
 }
 
@@ -931,6 +1069,7 @@ function openCombat(run: Run, events: GameEvent[]) {
     h.poisonTicked = false;
     h.freeSpell = false;
     h.freeSpellUsed = false;
+    h.lowHpHealUsed = false;
     const block = relicBuild(h, run).startBlock;
     if (block > 0 && !h.down) giveBlock(run, h, block, events);
   }
@@ -941,6 +1080,7 @@ function openCombat(run: Run, events: GameEvent[]) {
     ? `${run.activeDoor?.title ?? "The hall"} — ${names}. ${phased.forms} forms. Relics from the halls are how you last.`
     : `${run.activeDoor?.title ?? "The hall"} opens onto ${names}.`;
   log(run, run.intro);
+  planIntents(run);
 }
 
 function rollRarity(odds: { common: number; rare: number; mythic: number }, rnd: number): Rarity {
@@ -1093,7 +1233,7 @@ function generateDoors(run: Run) {
     if (doors.some((d) => d.kind === "shop")) run.intro += " A stall waits beside it.";
     return;
   }
-  const bag: DoorKind[] = ["quiet", "vault", "ambush", "nest", "supplies", "curse", "font", "shop", "shop", "shop"];
+  const bag: DoorKind[] = ["quiet", "vault", "ambush", "nest", "supplies", "campfire", "curse", "font", "shop", "shop", "shop"];
   const want = run.depth === 1 ? 3 : 2;
   const picked: DoorKind[] = [];
   for (const kind of shuffle(bag, rnd)) {
@@ -1172,6 +1312,7 @@ export function startRun(roster: PersistedHero[], partyIds: string[], seed?: num
     supplies: [],
     gold: 0,
     shop: [],
+    shopRested: false,
     afterEquip: null,
     supplyDeck: [],
     supplyDiscard: [],
@@ -1246,6 +1387,7 @@ export function startRun(roster: PersistedHero[], partyIds: string[], seed?: num
       freeSpell: false,
       freeSpellUsed: false,
       stored: 0,
+      lowHpHealUsed: false,
     } satisfies HeroState;
   });
   const opening = drawIds(run.supplyDeck, run.supplyDiscard, 2, rnd);
@@ -1291,10 +1433,19 @@ export function chooseDoor(prev: Run, doorUid: string): StepResult {
   }
   if (door.kind === "shop") {
     run.shop = stockShop(run);
+    run.shopRested = false;
     run.phase = "shop";
     run.intro = "The stallkeeper weighs your coin.";
     log(run, `A stall. You hold ${run.gold} gold.`);
     events.push({ sfx: "card", doorDone: "shop" });
+    return { run, events };
+  }
+  if (door.kind === "campfire") {
+    run.phase = "campfire";
+    run.enemies = [];
+    run.intro = "A fire is already laid. No one else is here.";
+    log(run, "Campfire. Rest, or forage the packs.");
+    events.push({ sfx: "heal" });
     return { run, events };
   }
   if (door.kind === "font") {
@@ -1334,6 +1485,7 @@ export function brace(prev: Run, heroId: string): StepResult {
   const run = clone(prev);
   const events: GameEvent[] = [];
   if (run.phase !== "prep") return { run: prev, events };
+  openAction(run);
   const hero = heroById(run, heroId);
   if (!hero || hero.down || hero.braced) return { run: prev, events };
   hero.braced = true;
@@ -1346,11 +1498,17 @@ export function brace(prev: Run, heroId: string): StepResult {
 export function useSupply(prev: Run, supplyUid: string, targetId: string | null): StepResult {
   const run = clone(prev);
   const events: GameEvent[] = [];
-  if (run.phase !== "prep" || run.prepSupplyUsed) return { run: prev, events };
+  openAction(run);
+  const camp = run.phase === "doors" || run.phase === "onward" || run.phase === "supply";
   const inst = run.supplies.find((s) => s.uid === supplyUid);
   if (!inst) return { run: prev, events };
   const def = SUPPLIES[inst.defId];
   if (!def) return { run: prev, events };
+  if (camp) {
+    if (!isCampHealSupply(def)) return { run: prev, events };
+  } else if (run.phase !== "prep" || run.prepSupplyUsed) {
+    return { run: prev, events };
+  }
   if (def.target === "enemy") {
     const foe = enemyById(run, targetId);
     if (!foe || foe.hp <= 0) return { run: prev, events };
@@ -1370,10 +1528,11 @@ export function useSupply(prev: Run, supplyUid: string, targetId: string | null)
   const actor = livingHeroes(run)[0] ?? run.party[0]!;
   log(run, `The party uses ${def.name}.`);
   const fakeHand: HandCard[] = [];
-  resolveEffectsClean(run, actor, def.effects, targetId, events, fakeHand);
+  const effects = camp ? def.effects.filter((e) => e.op !== "block") : def.effects;
+  resolveEffectsClean(run, actor, effects, targetId, events, fakeHand);
   run.supplies = run.supplies.filter((s) => s.uid !== supplyUid);
   run.supplyDiscard.push(inst.defId);
-  run.prepSupplyUsed = true;
+  if (!camp) run.prepSupplyUsed = true;
   events.push({ sfx: "card" });
   const wiped = finishIfWiped(run);
   if (wiped) return { run, events, outcome: "defeat" };
@@ -1411,6 +1570,7 @@ export function playCard(prev: Run, handUid: string, targetId: string | null): S
   const run = clone(prev);
   const events: GameEvent[] = [];
   if (run.phase !== "battle") return { run: prev, events };
+  openAction(run);
   const hero = run.party[run.actorIndex];
   if (!hero || hero.down) return { run: prev, events };
   const handCard = run.hand.find((c) => c.uid === handUid);
@@ -1509,6 +1669,7 @@ export function endTurn(prev: Run): StepResult {
 export function stepEnemies(prev: Run): StepResult {
   if (prev.phase !== "enemy") return { run: prev, events: [] };
   const run = clone(prev);
+  openAction(run);
   run.clock += 1;
   const events: GameEvent[] = [];
   let guard = 0;
@@ -1551,8 +1712,11 @@ export function stepEnemies(prev: Run): StepResult {
       }
       const foe = foes[run.strikeIndex]!;
       if (foe.skip) {
+        const reeling = foe.staggered;
         foe.skip = false;
-        log(run, `${foe.name} loses its action in the smoke.`);
+        foe.staggered = false;
+        foe.intentTargetId = null;
+        log(run, reeling ? `${foe.name} is still reeling from its transformation.` : `${foe.name} loses its action in the smoke.`);
         run.strikeIndex += 1;
         run.strikeHitsLeft = 0;
         events.push({ sfx: "ui" });
@@ -1562,18 +1726,22 @@ export function stepEnemies(prev: Run): StepResult {
       if (run.strikeHitsLeft <= 0) run.strikeHitsLeft = swings;
       const living = livingHeroes(run);
       if (living.length === 0) return { run, events, outcome: "defeat" };
+      const cleave = foeCleaves(foe);
       let target = living[0]!;
-      const taunt = living.find((h) => h.id === run.tauntHeroId);
-      if (taunt) target = taunt;
-      else {
-        const weights = living.map((h) => 1.2 - h.hp / Math.max(1, h.maxHp));
-        let r = roll(run) * weights.reduce((a, b) => a + b, 0);
-        for (let i = 0; i < living.length; i++) {
-          r -= weights[i]!;
-          if (r <= 0) {
-            target = living[i]!;
-            break;
-          }
+      if (cleave) {
+        foe.intentTargetId = "all";
+      } else {
+        const taunt = living.find((h) => h.id === run.tauntHeroId);
+        const stored = living.find((h) => h.id === foe.intentTargetId);
+        if (taunt) {
+          target = taunt;
+          foe.intentTargetId = taunt.id;
+        } else if (stored) {
+          target = stored;
+        } else {
+          const next = chooseIntentTarget(run, foe);
+          foe.intentTargetId = next;
+          target = living.find((h) => h.id === next) ?? living[0]!;
         }
       }
       strikeHero(run, foe, target, events);
@@ -1785,6 +1953,74 @@ export function leaveShop(prev: Run): StepResult {
   return { run, events: [] };
 }
 
+function healPortion(hero: HeroState, portion: number, events: GameEvent[]) {
+  if (hero.down || hero.hp <= 0) return;
+  const amount = Math.round(hero.maxHp * portion);
+  if (amount <= 0) return;
+  healHero(hero, amount, events);
+}
+
+export function restAtCampfire(prev: Run): StepResult {
+  const run = clone(prev);
+  const events: GameEvent[] = [];
+  if (run.phase !== "campfire") return { run: prev, events };
+  let risen = 0;
+  for (const hero of run.party) {
+    if (hero.down || hero.hp <= 0) {
+      hero.down = false;
+      hero.hp = Math.max(1, Math.round(hero.maxHp * 0.25));
+      risen += 1;
+      events.push({ sfx: "heal", floater: { key: `hero:${hero.id}`, text: "Rises", kind: "heal" } });
+      continue;
+    }
+    healPortion(hero, 0.3, events);
+  }
+  run.phase = "onward";
+  run.clearedNote = risen > 0 ? "The fire brings the fallen back, and steadies the rest." : "The party rests by the fire.";
+  log(run, run.clearedNote);
+  return { run, events };
+}
+
+export function forageAtCampfire(prev: Run): StepResult {
+  const run = clone(prev);
+  const events: GameEvent[] = [];
+  if (run.phase !== "campfire") return { run: prev, events };
+  if (run.supplies.length >= POUCH_MAX) {
+    log(run, "The pouch is full. Forage nothing, or rest instead.");
+    return { run, events: [{ sfx: "ui", banner: "Pouch full" }] };
+  }
+  const rnd = () => roll(run);
+  const got = drawIds(run.supplyDeck, run.supplyDiscard, 1, rnd);
+  run.supplyDeck = got.deck;
+  run.supplyDiscard = got.discard;
+  const id = got.ids[0];
+  if (id) run.supplies.push({ uid: nextUid(run, "s"), defId: id });
+  run.phase = "onward";
+  run.clearedNote = id ? `Foraged ${SUPPLIES[id]?.name ?? "a supply"}.` : "The packs are empty.";
+  log(run, run.clearedNote);
+  return { run, events: [{ sfx: "card" }] };
+}
+
+export function restAtStall(prev: Run): StepResult {
+  const run = clone(prev);
+  const events: GameEvent[] = [];
+  if (run.phase !== "shop") return { run: prev, events };
+  if (run.shopRested) {
+    log(run, "The fire has already been shared.");
+    return { run, events: [{ sfx: "ui" }] };
+  }
+  if (run.gold < 30) {
+    log(run, "Not enough gold to rest by the fire.");
+    return { run, events: [{ sfx: "ui" }] };
+  }
+  run.gold -= 30;
+  run.shopRested = true;
+  for (const hero of run.party) healPortion(hero, 0.2, events);
+  log(run, `Rested by the fire for 30 gold. ${run.gold} left.`);
+  events.push({ sfx: "heal", banner: "Rest by the fire" });
+  return { run, events };
+}
+
 export function discardSupply(prev: Run, supplyUid: string): StepResult {
   const run = clone(prev);
   if (run.phase !== "supply") return { run: prev, events: [] };
@@ -1872,7 +2108,9 @@ export function cardNeeds(cardId: string): "enemy" | "ally" | "any-hero" | "none
 
 export function enemyIntent(enemy: EnemyState, round = 1): string {
   const atk = Math.max(1, enemy.atk - enemy.weaken) + Math.max(0, round - 20);
+  if (enemy.staggered) return "Staggered";
   if (enemy.skip) return "Skips";
+  if ((enemy.intent ?? "full") === "hidden") return "?";
   const cleave = enemy.alwaysCleave || (enemy.raging && enemy.rageCleave);
   const double = enemy.alwaysDouble || (enemy.raging && enemy.rageDouble);
   const tag = enemy.raging ? "Rage " : "Attack ";

@@ -1,3 +1,5 @@
+export type IntentMode = "full" | "amount" | "hidden" | "hunt";
+
 export type Rarity = "common" | "rare" | "mythic";
 
 export type DoorKind =
@@ -9,6 +11,7 @@ export type DoorKind =
   | "shop"
   | "font"
   | "curse"
+  | "campfire"
   | "miniboss"
   | "final";
 
@@ -101,6 +104,14 @@ export interface RelicDef {
   storeCap?: number;
   /** Heal granted when a full grudge plate is released. */
   grudgeHeal?: number;
+  /** Heal each wearer after a fight, up to maximum health. */
+  postFightHeal?: number;
+  /** Added to single-target heals this hero casts on someone else. */
+  healBonus?: number;
+  /** Heal the first time this hero drops below half health in a fight. */
+  lowHpHeal?: number;
+  /** Extra cards drawn each turn. */
+  handSize?: number;
   /** If set, only these classes can wear it. */
   classes?: string[];
   /** Cards added to the wearer's deck while this is equipped. */
@@ -123,6 +134,8 @@ export interface MonsterDef {
   rageBonus?: number;
   rageCleave?: boolean;
   rageDouble?: boolean;
+  /** How much of the chosen target is shown. Omitted means "full". */
+  intent?: IntentMode;
   /** Total forms. Seal bosses use 3; the King uses 2. Omitted means 1. */
   phases?: number;
   shifts?: PhaseShift[];
@@ -207,6 +220,8 @@ export interface HeroState {
   freeSpellUsed: boolean;
   /** Damage weathered while wearing a grudge plate. */
   stored: number;
+  /** The bloodwell has already answered this fight. */
+  lowHpHealUsed: boolean;
 }
 
 export interface EnemyState {
@@ -245,6 +260,14 @@ export interface EnemyState {
   alwaysDouble: boolean;
   boss: boolean;
   final: boolean;
+  /** Lost its next strike because it just changed form. */
+  staggered: boolean;
+  /** Already changed form during the current action. */
+  formLock: boolean;
+  /** How the telegraph is shown. */
+  intent: IntentMode;
+  /** Hero id this foe will strike, "all", or null when it will not strike. */
+  intentTargetId: string | null;
 }
 
 export interface DoorState {
@@ -299,6 +322,7 @@ export type Phase =
   | "equip"
   | "supply"
   | "shop"
+  | "campfire"
   | "curse"
   | "onward";
 
@@ -327,6 +351,8 @@ export interface Run {
   supplies: SupplyInst[];
   gold: number;
   shop: ShopEntry[];
+  /** The stall's 30-gold rest has already been used this visit. */
+  shopRested: boolean;
   /** After equipping a bought relic, return here instead of moving on. */
   afterEquip: "shop" | null;
   supplyDeck: string[];

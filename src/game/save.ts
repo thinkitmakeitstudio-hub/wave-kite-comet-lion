@@ -54,6 +54,7 @@ function normalizeRun(raw: unknown): Run | null {
   run.cacheTaken = Boolean(run.cacheTaken);
   run.gold = typeof run.gold === "number" && Number.isFinite(run.gold) ? Math.max(0, Math.floor(run.gold)) : 0;
   if (!Array.isArray(run.shop)) run.shop = [];
+  run.shopRested = run.shopRested === true;
   if (run.afterEquip !== "shop") run.afterEquip = null;
   if (!run.equipped) run.equipped = {};
   if (!Array.isArray(run.locker)) run.locker = [];
@@ -68,6 +69,7 @@ function normalizeRun(raw: unknown): Run | null {
     hero.freeSpellUsed = hero.freeSpellUsed === true;
     if (typeof hero.stored !== "number" || !Number.isFinite(hero.stored)) hero.stored = 0;
     hero.stored = Math.max(0, Math.min(99, Math.floor(hero.stored)));
+    hero.lowHpHealUsed = hero.lowHpHealUsed === true;
   }
   if (Array.isArray(run.enemies)) {
     for (const enemy of run.enemies) hardenEnemy(enemy);
@@ -88,6 +90,13 @@ function hardenEnemy(enemy: EnemyState) {
   if (typeof enemy.bleed !== "number" || !Number.isFinite(enemy.bleed)) enemy.bleed = 0;
   enemy.bleed = Math.max(0, Math.floor(enemy.bleed));
   if (typeof enemy.bleedTicked !== "boolean") enemy.bleedTicked = false;
+  enemy.staggered = enemy.staggered === true;
+  enemy.formLock = false;
+  const known = def?.intent;
+  enemy.intent = enemy.intent === "amount" || enemy.intent === "hidden" || enemy.intent === "hunt" || enemy.intent === "full"
+    ? enemy.intent
+    : known ?? "full";
+  if (enemy.intentTargetId !== null && typeof enemy.intentTargetId !== "string") enemy.intentTargetId = null;
 }
 
 function normalizeResults(raw: unknown): Results | null {

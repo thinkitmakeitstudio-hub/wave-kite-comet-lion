@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { CLASSES, CLASS_ORDER, RELICS, computeStats, relicIdsOf, xpThreshold, LEVEL_CAP } from "@/game/content";
 import { useGame } from "@/game/store";
+import { BookOpen, Backpack, Gem, Volume2, VolumeX } from "lucide-react";
 import { ClassMark } from "./cards";
 import { GearBook, ItemCodex } from "./overlays";
 
@@ -33,16 +34,20 @@ export function Camp() {
           {stats.wins} wins · {stats.runs} delves · {stats.bosses} bosses slain
         </p>
         <div className="mast-actions">
-          <button type="button" className="btn btn-ghost" data-testid="open-gear" onClick={() => setGear(true)}>
+          <button type="button" className="btn btn-ghost mast-btn" data-testid="open-gear" onClick={() => setGear(true)}>
+            <Backpack className="icon" aria-hidden="true" />
             Gear
           </button>
-          <button type="button" className="btn btn-ghost" data-testid="open-items" onClick={() => setCodex(true)}>
+          <button type="button" className="btn btn-ghost mast-btn" data-testid="open-items" onClick={() => setCodex(true)}>
+            <Gem className="icon" aria-hidden="true" />
             Items
           </button>
-          <button type="button" className="btn btn-ghost" onClick={() => openRules(true)}>
+          <button type="button" className="btn btn-ghost mast-btn" onClick={() => openRules(true)}>
+            <BookOpen className="icon" aria-hidden="true" />
             How to play
           </button>
-          <button type="button" className="btn btn-ghost" onClick={toggleMute}>
+          <button type="button" className="btn btn-ghost mast-btn" onClick={toggleMute}>
+            {mute ? <VolumeX className="icon" aria-hidden="true" /> : <Volume2 className="icon" aria-hidden="true" />}
             {mute ? "Sound off" : "Sound on"}
           </button>
         </div>

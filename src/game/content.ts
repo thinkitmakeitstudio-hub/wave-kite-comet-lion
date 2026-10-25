@@ -302,6 +302,8 @@ export const SUPPLY_DECK: string[] = [
   ...supply("sup-horn", "Guard Horn", "ally", "An ally gains +2 Defense for this battle.", [{ op: "def", amount: 2 }], 2),
   ...supply("sup-mana", "Mana Phial", "ally", "Restore 4 mana to a spellcaster.", [{ op: "mana", amount: 4 }], 2),
   ...supply("sup-revive", "Revive Phial", "any-hero", "A downed ally stands with 12 health. A standing ally heals 12.", [{ op: "revive", amount: 12 }], 2),
+  ...supply("sup-stew", "Hearth Stew", "none", "Every hero heals 7.", [{ op: "heal", amount: 7, all: true }], 2),
+  ...supply("sup-bandage", "Linen Bandage", "ally", "Heal an ally for 5. In a fight they also gain 4 Block.", [{ op: "heal", amount: 5 }, { op: "block", amount: 4 }], 3),
 ];
 
 export const SUPPLY_COST: Record<string, number> = {
@@ -317,6 +319,8 @@ export const SUPPLY_COST: Record<string, number> = {
   "sup-horn": 16,
   "sup-mana": 22,
   "sup-revive": 34,
+  "sup-stew": 24,
+  "sup-bandage": 10,
 };
 
 export function relicCost(rarity: Rarity): number {
@@ -358,6 +362,13 @@ export const TREASURE_DECKS: { common: string[]; rare: string[]; mythic: string[
     }, 2),
     ...relic({ id: "rel-saw", name: "Sawtooth", rarity: "common", text: "Your attacks apply 2 Bleed.", bleedOnHit: 2 }, 2),
     ...relic({ id: "rel-hook", name: "Gut Hook", rarity: "common", text: "+1 Attack. Your attacks apply 1 Bleed.", atk: 1, bleedOnHit: 1 }, 2),
+    ...relic({
+      id: "rel-thread",
+      name: "Mender's Thread",
+      rarity: "common",
+      text: "After each fight, you heal 5.",
+      postFightHeal: 5,
+    }, 2),
   ],
   rare: [
     ...relic({ id: "rel-sun", name: "Sunbrand", rarity: "rare", text: "+4 Attack.", atk: 4 }, 2),
@@ -484,6 +495,27 @@ export const TREASURE_DECKS: { common: string[]; rare: string[]; mythic: string[
       grudgeHeal: 8,
       grantCards: ["grd-blow"],
     }, 1),
+    ...relic({
+      id: "rel-censer",
+      name: "Saint's Censer",
+      rarity: "rare",
+      text: "Your single-target heals restore 2 more.",
+      healBonus: 2,
+    }, 1),
+    ...relic({
+      id: "rel-bloodwell",
+      name: "Bloodwell Amulet",
+      rarity: "rare",
+      text: "The first time each fight you drop below half health, heal 8.",
+      lowHpHeal: 8,
+    }, 1),
+    ...relic({
+      id: "rel-monocle",
+      name: "Seer's Monocle",
+      rarity: "rare",
+      text: "You draw 4 cards each turn instead of 3. You still play one.",
+      handSize: 1,
+    }, 1),
   ],
   mythic: [
     ...relic({ id: "rel-dragon", name: "Dragonheart", rarity: "mythic", text: "+5 Attack. +12 maximum health.", atk: 5, hp: 12 }, 1),
@@ -508,14 +540,14 @@ export const WEAK_DECK = [
 
 export const STANDARD_DECK = [
   ...monster({ id: "bone", name: "Bone Guard", blurb: "Old armor, older orders.", hp: 16, atk: 7, armor: 1, xp: 8, tier: "standard" }, 4),
-  ...monster({ id: "cultist", name: "Cultist", blurb: "Chants that sharpen a knife.", hp: 13, atk: 8, armor: 0, xp: 8, tier: "standard" }, 4),
+  ...monster({ id: "cultist", name: "Cultist", blurb: "Chants that sharpen a knife.", hp: 13, atk: 8, armor: 0, xp: 8, tier: "standard", intent: "amount" }, 4),
   ...monster({ id: "spider", name: "Crypt Spider", blurb: "The bite keeps working.", hp: 12, atk: 6, armor: 0, xp: 8, tier: "standard", poisonOnHit: 2 }, 4),
 ];
 
 export const ELITE_DECK = [
   ...monster({ id: "ogre", name: "Hall Ogre", blurb: "The ceiling is a suggestion.", hp: 26, atk: 9, armor: 1, xp: 14, tier: "elite" }, 2),
-  ...monster({ id: "wraith", name: "Veil Wraith", blurb: "Armor means less to smoke.", hp: 18, atk: 8, armor: 0, xp: 14, tier: "elite", pierce: 2 }, 2),
-  ...monster({ id: "hunter", name: "Seal Hunter", blurb: "It came for your heart.", hp: 20, atk: 10, armor: 0, xp: 16, tier: "elite" }, 2),
+  ...monster({ id: "wraith", name: "Veil Wraith", blurb: "Armor means less to smoke.", hp: 18, atk: 8, armor: 0, xp: 14, tier: "elite", pierce: 2, intent: "hidden" }, 2),
+  ...monster({ id: "hunter", name: "Seal Hunter", blurb: "It came for your heart.", hp: 20, atk: 10, armor: 0, xp: 16, tier: "elite", intent: "hunt" }, 2),
 ];
 
 monster({
@@ -575,12 +607,12 @@ monster({
     },
     {
       form: "The Maw",
-      line: "The maw opens. Two bites, and the poison sinks deeper.",
+      line: "The maw opens. Two bites, and a little venom.",
       hp: 8,
-      atk: 2,
+      atk: 1,
       armor: 0,
       pierce: 1,
-      poisonOnHit: 2,
+      poisonOnHit: 1,
     },
   ],
 });
@@ -987,6 +1019,19 @@ export const DOOR_TEMPLATES: Record<Exclude<DoorKind, "miniboss" | "final">, Doo
     ],
     fight: false,
   },
+  campfire: {
+    kind: "campfire",
+    title: "Campfire",
+    risk: "Low",
+    lootLabel: "Rest, or forage one supply",
+    odds: null,
+    hints: [
+      "Orange light, and no footprints leading away.",
+      "A ring of stones still warm. Nobody is waiting.",
+      "Sparks climb the ruin. The hall is quiet.",
+    ],
+    fight: false,
+  },
 };
 
 export const BOSS_DOOR = {
@@ -1041,6 +1086,10 @@ export function computeStats(classId: string, level: number, relicIds: string[])
   let bleedOnHit = 0;
   let storeCap = 0;
   let grudgeHeal = 0;
+  let postFightHeal = 0;
+  let healBonus = 0;
+  let lowHpHeal = 0;
+  let handSize = 0;
   for (const id of relicIds) {
     const r = RELICS[id];
     if (!r) continue;
@@ -1057,6 +1106,10 @@ export function computeStats(classId: string, level: number, relicIds: string[])
     bleedOnHit += r.bleedOnHit ?? 0;
     storeCap += r.storeCap ?? 0;
     grudgeHeal += r.grudgeHeal ?? 0;
+    postFightHeal += r.postFightHeal ?? 0;
+    healBonus += r.healBonus ?? 0;
+    lowHpHeal += r.lowHpHeal ?? 0;
+    handSize += r.handSize ?? 0;
     if (r.deathWard) deathWard = true;
   }
   return {
@@ -1074,6 +1127,10 @@ export function computeStats(classId: string, level: number, relicIds: string[])
     bleedOnHit,
     storeCap,
     grudgeHeal,
+    postFightHeal,
+    healBonus,
+    lowHpHeal,
+    handSize,
   };
 }
 
@@ -1101,14 +1158,26 @@ export function relicEffects(relic: RelicDef): string[] {
   if (relic.bleedOnHit) bits.push(`Attacks apply ${relic.bleedOnHit} Bleed`);
   if (relic.storeCap) bits.push(`Stores ${relic.storeCap} damage`);
   if (relic.grudgeHeal) bits.push(`Full plate heals ${relic.grudgeHeal}`);
+  if (relic.postFightHeal) bits.push(`Heals ${relic.postFightHeal} after each fight`);
+  if (relic.healBonus) bits.push(`Single-target heals +${relic.healBonus}`);
+  if (relic.lowHpHeal) bits.push(`Below half: heal ${relic.lowHpHeal} once per fight`);
+  if (relic.handSize) bits.push(relic.handSize === 1 ? "Hand +1 card" : `Hand +${relic.handSize} cards`);
   if (relic.deathWard) bits.push("First lethal blow leaves you at 1");
   return bits;
+}
+
+export function isCampHealSupply(def: SupplyDef): boolean {
+  if (def.effects.length === 0) return false;
+  const heals = def.effects.some((e) => e.op === "heal" || e.op === "revive" || e.op === "cleanse");
+  const only = def.effects.every((e) => e.op === "heal" || e.op === "revive" || e.op === "cleanse" || e.op === "block");
+  return heals && only;
 }
 
 export function foePlan(kind: DoorKind, party: number): { label: string; count: number } {
   if (kind === "supplies") return { label: "No fight", count: 0 };
   if (kind === "shop") return { label: "Spend gold on supplies and relics", count: 0 };
   if (kind === "font") return { label: "A spring of mana. No fight", count: 0 };
+  if (kind === "campfire") return { label: "No foes. Rest or forage", count: 0 };
   if (kind === "curse") return { label: "A trap, then treasure", count: 0 };
   if (kind === "miniboss") {
     return { label: "Seal boss · 3 forms, each harder", count: 1 };

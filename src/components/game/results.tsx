@@ -56,7 +56,7 @@ export function Results() {
         </section>
       ) : null}
       {results.victory && anyRelic ? (
-        <section className="section">
+        <section className="section keepsake">
           <h2>Bind a keepsake</h2>
           <p className="hint">One relic, on the hero who carried it. This replaces their previous keepsake.</p>
           {results.rows.map((row) =>

@@ -3,6 +3,9 @@ import { CARDS, CLASSES, POUCH_MAX, RELICS, SUPPLIES, computeStats, relicIdsOf }
 import {
   cardNeeds,
   enemyIntent,
+  incomingOn,
+  intentArrow,
+  revealsTarget,
   slotsFor,
 } from "@/game/engine";
 import { useGame } from "@/game/store";
@@ -19,7 +22,8 @@ const HINT: Record<Run["phase"], string> = {
   treasure: "Claim one relic. Three slots per hero — a keepsake already counts.",
   equip: "Choose who wears it. A full hero must replace a delve relic. Keepsakes stay.",
   supply: "The pouch holds five. Leave extras behind, then pack up.",
-  shop: "Buy supplies or relics with gold from cleared fights. The pouch still holds five.",
+  shop: "Buy supplies or relics with gold from cleared fights. Rest by the fire costs 30 gold, once.",
+  campfire: "Rest heals the party. Forage adds one supply, if the pouch has room.",
   curse: "The trap stops at 1 health. The relic inside might be worth the bite.",
   onward: "Deeper halls hit a little harder.",
 };
@@ -32,7 +36,7 @@ const PHASE_LABEL = [
 ] as const;
 
 function phaseIndex(phase: Run["phase"]): number {
-  if (phase === "doors" || phase === "onward" || phase === "supply" || phase === "shop") return 0;
+  if (phase === "doors" || phase === "onward" || phase === "supply" || phase === "shop" || phase === "campfire") return 0;
   if (phase === "prep") return 1;
   if (phase === "battle" || phase === "enemy") return 2;
   return 3;
@@ -75,12 +79,19 @@ export function Delve() {
   const buySupply = useGame((s) => s.buySupply);
   const buyRelic = useGame((s) => s.buyRelic);
   const leaveShop = useGame((s) => s.leaveShop);
+  const restAtStall = useGame((s) => s.restAtStall);
+  const restAtCampfire = useGame((s) => s.restAtCampfire);
+  const forageAtCampfire = useGame((s) => s.forageAtCampfire);
 
   const [pick, setPick] = useState<Pick>(null);
   const [replacing, setReplacing] = useState<string | null>(null);
+  const [replaceId, setReplaceId] = useState<string | null>(null);
   const [shaking, setShaking] = useState(false);
   const [gear, setGear] = useState(false);
   const [codex, setCodex] = useState(false);
+  const [menu, setMenu] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [aim, setAim] = useState<string | null>(null);
 
   const handKey = run?.hand.map((c) => c.uid).join("|") ?? "";
   const phase = run?.phase;
@@ -91,6 +102,9 @@ export function Delve() {
   useEffect(() => {
     setPick(null);
     setReplacing(null);
+    setReplaceId(null);
+    setDetailId(null);
+    setAim(null);
   }, [phase, actor, handKey, round]);
 
   useEffect(() => {
@@ -151,24 +165,25 @@ export function Delve() {
   return (
     <div className={`screen scene${shaking ? " is-shaking" : ""}`}>
       <header className="topbar">
-        <div>
+        <div className="topbar-stats">
           <p className="kicker">Depth {run.depth}</p>
           <div className="seals" aria-label={`${run.seals} of 3 seals broken`}>
             {[0, 1, 2].map((i) => (
               <i key={i} className={`seal${i < run.seals ? " is-on" : ""}`} />
             ))}
             <span className="stat">Gold {run.gold}</span>
-            <span className="hint">{run.seals}/3 seals</span>
+            <span className="hint seal-count">{run.seals}/3 seals</span>
           </div>
         </div>
         <div className="phase-track" aria-label="Phase">
           {PHASE_LABEL.map(([key, label], i) => (
             <span key={key} className={i === on ? "is-on" : ""}>
-              {label}
+              <i className="phase-dot" aria-hidden="true" />
+              <span className="phase-label">{label}</span>
             </span>
           ))}
         </div>
-        <div className="inline-actions">
+        <div className="inline-actions topbar-actions">
           <button type="button" className="btn btn-tiny btn-gold" data-testid="open-gear" onClick={() => setGear(true)}>
             Gear
           </button>
@@ -185,13 +200,43 @@ export function Delve() {
             Flee
           </button>
         </div>
+        <button
+          type="button"
+          className="btn btn-tiny menu-toggle"
+          aria-expanded={menu}
+          aria-label="Menu"
+          onClick={() => setMenu(true)}
+        >
+          ☰
+        </button>
       </header>
 
       <div className="stage">
-        {run.phase === "doors" ? (
+        {run.phase === "campfire" ? (
+          <div className="campfire-panel">
+            <img className="campfire-art" src="/doors/door-campfire.png" alt="" />
+            <h2 className="name">Campfire</h2>
+            <p className="hint">A safe room. Choose one.</p>
+            <div className="campfire-choices">
+              <button type="button" className="btn btn-gold" data-testid="campfire-rest" onClick={restAtCampfire}>
+                Rest
+              </button>
+              <p className="hint">Standing heroes heal 30% of their health. Downed heroes get back up at 25%.</p>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                data-testid="campfire-forage"
+                disabled={run.supplies.length >= POUCH_MAX}
+                onClick={forageAtCampfire}
+              >
+                {run.supplies.length >= POUCH_MAX ? "Pouch full" : "Forage"}
+              </button>
+              <p className="hint">Gain 1 random supply, if the pouch has room.</p>
+            </div>
+          </div>
+        ) : run.phase === "doors" ? (
           <>
-            <p className="hint">{HINT.doors}</p>
-            {run.intro ? <h2 className="name">{run.intro}</h2> : null}
+            {run.intro ? <h2 className="name stage-title">{run.intro}</h2> : null}
             <div className="door-grid">
               {run.doors.map((door, i) => (
                 <article key={door.uid} className={`door door-${door.kind}`}>
@@ -199,11 +244,11 @@ export function Delve() {
                   <div className="door-body">
                   <p className={`role risk-${door.risk.toLowerCase()}`}>{door.risk} risk</p>
                   <h2 className="name">{door.title}</h2>
-                  <p>{door.hint}</p>
+                  <p className="door-rumor">{door.hint}</p>
                   <p className="chip-name">{door.foes}</p>
-                  <p className="hint">{door.lootLabel}</p>
+                  <p className="hint door-extra">{door.lootLabel}</p>
                   {door.odds ? (
-                    <>
+                    <div className="door-extra">
                       <div className="odds" aria-hidden>
                         <i className="odd-common" style={{ flex: `${door.odds.common} 0 0` }} />
                         <i className="odd-rare" style={{ flex: `${door.odds.rare} 0 0` }} />
@@ -212,7 +257,7 @@ export function Delve() {
                       <p className="hint">
                         {door.odds.common}% common · {door.odds.rare}% rare · {door.odds.mythic}% mythic
                       </p>
-                    </>
+                    </div>
                   ) : null}
                   <button type="button" className="btn btn-gold" data-testid={`door-${i}`} onClick={() => chooseDoor(door.uid)}>
                     Enter
@@ -226,7 +271,7 @@ export function Delve() {
           <div className={`battlefield${upper ? " has-upper" : ""}`}>
             <p className="scene-caption">{run.log.at(-1) || run.intro || HINT[run.phase]}</p>
             {run.enemies.length > 0 ? (
-              <div className="foe-line" aria-label="Foes">
+              <div className="foe-line" data-foes={run.enemies.length} aria-label="Foes">
                 {run.enemies.map((enemy) => {
                   const dead = enemy.hp <= 0;
                   const targetable = !dead && pick?.need === "enemy";
@@ -237,27 +282,28 @@ export function Delve() {
                       ? `/figures/foe-${enemy.defId}-${form}.png`
                       : `/figures/foe-${enemy.defId}.png`;
                   const wide = enemy.defId === "bat" || enemy.defId === "spider" || enemy.defId === "hydra";
+                  const bulky = enemy.defId === "ogre" || enemy.defId === "hydra" || enemy.defId === "spider" || enemy.defId === "bat";
                   const swinging = attacker === enemy.uid;
-                  const className = `stand${enemy.boss ? ` is-boss is-form-${form}` : ""}${wide ? " is-wide" : ""}${enemy.raging ? " is-raging" : ""}${dead ? " is-down" : ""}${targetable ? " is-target" : ""}${hit ? " is-hit" : ""}${swinging ? " is-striking" : ""}`;
+                  const hiddenIntent = !dead && (enemy.intent ?? "full") === "hidden" && !enemy.skip && !enemy.staggered;
+                  const arrow = dead ? null : intentArrow(enemy, run.party);
+                  const className = `stand${enemy.boss ? ` is-boss is-form-${form}` : bulky ? " is-big" : ""}${wide ? " is-wide" : ""}${enemy.raging ? " is-raging" : ""}${enemy.staggered ? " is-staggered" : ""}${dead ? " is-down" : ""}${targetable ? " is-target" : ""}${hit ? " is-hit" : ""}${swinging ? " is-striking" : ""}${aim === enemy.uid ? " is-aiming" : ""}`;
                   const body = (
                     <>
                       <Floaters items={floats(`enemy:${enemy.uid}`)} />
-                      <PhaseFlash form={form} />
+                      <PhaseFlash form={form} staggered={enemy.staggered} />
                       <StandArt src={art} mark={<GameIcon name="skull" />} />
                       <div className="stand-plate">
                         {enemy.boss && form > 1 && enemy.formName ? <p className="role">{enemy.formName}</p> : null}
-                        <p className="chip-name">
-                          {enemy.name}
-                          {dead ? " · Down" : ` · ${enemy.hp}/${enemy.maxHp}`}
-                        </p>
-                        <VitalBar hp={enemy.hp} maxHp={enemy.maxHp} poison={enemy.poison} bleed={enemy.bleed} shield={0} foe />
-                        <p className="hint">
+                        <p className="chip-name">{dead ? `${enemy.name} · Down` : enemy.name}</p>
+                        <HpReadout hp={enemy.hp} maxHp={enemy.maxHp} poison={enemy.poison} bleed={enemy.bleed} shield={0} foe />
+                        <p className={`hint intent-line${hiddenIntent ? " is-hidden" : ""}`}>
                           {dead ? "Defeated" : enemyIntent(enemy, run.round)}
                           {!dead && enemy.armor > 0 ? ` · Armor ${enemy.armor}` : ""}
                           {!dead && enemy.pierce > 0 ? ` · Pierce ${enemy.pierce}` : ""}
                           {!dead && enemy.poison > 0 ? ` · Poison ${enemy.poison}` : ""}
                           {!dead && enemy.bleed > 0 ? ` · Bleed ${enemy.bleed}` : ""}
                         </p>
+                        {arrow ? <p className="hint intent-arrow">{arrow}</p> : null}
                         {enemy.boss && (enemy.forms || 1) > 1 ? (
                           <div className="form-pips" aria-label={`Form ${form} of ${enemy.forms}`}>
                             {Array.from({ length: enemy.forms }, (_, i) => (
@@ -270,13 +316,13 @@ export function Delve() {
                   );
                   if (targetable) {
                     return (
-                      <button key={swinging ? `${enemy.uid}-${run.clock}` : enemy.uid} type="button" className={className} onClick={() => commitPick(enemy.uid)}>
+                      <button key={swinging ? `${enemy.uid}-${run.clock}` : enemy.uid} type="button" className={className} onClick={() => { setAim(enemy.uid); commitPick(enemy.uid); }}>
                         {body}
                       </button>
                     );
                   }
                   return (
-                    <div key={swinging ? `${enemy.uid}-${run.clock}` : enemy.uid} className={className}>
+                    <div key={swinging ? `${enemy.uid}-${run.clock}` : enemy.uid} className={className} onClick={() => setAim((id) => (id === enemy.uid ? null : enemy.uid))} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setAim((id) => (id === enemy.uid ? null : enemy.uid)); } }} role="button" tabIndex={0}>
                       {body}
                     </div>
                   );
@@ -284,18 +330,25 @@ export function Delve() {
               </div>
             ) : null}
             {run.enemies.length === 0 && (run.phase === "treasure" || (run.phase === "equip" && run.pendingRelic)) ? (
-              <div className="foe-line is-loot-row" aria-label="Relics">
-                {(run.phase === "equip" && run.pendingRelic
-                  ? [{ uid: "pending", defId: run.pendingRelic }]
-                  : run.offer
+              <div className={`foe-line is-loot-row${replacing ? " is-compare" : ""}`} aria-label="Relics">
+                {(replacing && run.pendingRelic
+                  ? [
+                      { uid: "pending", defId: run.pendingRelic, swap: false },
+                      ...(run.equipped[replacing] ?? []).map((id) => ({ uid: id, defId: id, swap: true })),
+                    ]
+                  : run.phase === "equip" && run.pendingRelic
+                    ? [{ uid: "pending", defId: run.pendingRelic, swap: false }]
+                    : run.offer.map((offer) => ({ uid: offer.uid, defId: offer.defId, swap: false }))
                 ).map((offer, i) => {
                   const relic = RELICS[offer.defId];
                   const picking = run.phase === "treasure";
+                  const selected = offer.swap && replaceId === offer.defId;
                   const body = (
                     <>
                       <StandArt src={`/relics/${offer.defId}.png`} mark={<GameIcon name={relic?.rarity === "mythic" ? "crown" : "gem"} />} />
                       <div className="stand-plate is-wares">
                         <p className="role">
+                          {replacing ? (offer.swap ? "Wearing · " : "New · ") : ""}
                           {relic?.rarity ?? "relic"}
                           {relic?.classes?.length
                             ? ` · ${relic.classes.map((id) => CLASSES[id]?.name ?? id).join(", ")}`
@@ -306,6 +359,20 @@ export function Delve() {
                       </div>
                     </>
                   );
+                  if (offer.swap) {
+                    return (
+                      <button
+                        key={offer.uid}
+                        type="button"
+                        className={`stand is-loot is-${relic?.rarity ?? "common"}${selected ? " is-selected" : ""}`}
+                        data-testid={`replace-${offer.defId}`}
+                        aria-pressed={selected}
+                        onClick={() => setReplaceId(offer.defId)}
+                      >
+                        {body}
+                      </button>
+                    );
+                  }
                   if (!picking) {
                     return (
                       <div key={offer.uid} className={`stand is-loot is-${relic?.rarity ?? "common"}`}>
@@ -319,7 +386,11 @@ export function Delve() {
                       type="button"
                       className={`stand is-loot is-${relic?.rarity ?? "common"}`}
                       data-testid={`relic-${i}`}
-                      onClick={() => chooseRelic(offer.uid)}
+                      onClick={(event) => {
+                        const card = event.currentTarget;
+                        if (card.scrollHeight > card.clientHeight + 2) setDetailId(offer.uid);
+                        else chooseRelic(offer.uid);
+                      }}
                     >
                       {body}
                     </button>
@@ -329,6 +400,15 @@ export function Delve() {
             ) : null}
             {run.phase === "shop" ? (
               <div className="foe-line is-stall" aria-label="Stall">
+                <button
+                  type="button"
+                  className="btn btn-gold rest-fire"
+                  data-testid="stall-rest"
+                  disabled={run.shopRested || run.gold < 30}
+                  onClick={restAtStall}
+                >
+                  {run.shopRested ? "Already rested" : "Rest by the fire · 30 gold"}
+                </button>
                 {(["supply", "relic"] as const).map((kind) => {
                   const items = run.shop.filter((item) => item.kind === kind);
                   if (items.length === 0) return null;
@@ -357,10 +437,12 @@ export function Delve() {
                                 mark={<GameIcon name={item.kind === "relic" ? "gem" : "pack"} />}
                               />
                               <div className="stand-plate is-wares">
-                                <p className="role">{item.price} gold</p>
                                 <p className="chip-name">{name}</p>
-                                <p className="hint">{broke ? "Not enough gold" : full ? "Pouch full" : text}</p>
+                                <p className="role price-chip">{item.price} gold</p>
+                                <p className="hint ware-desc">{text}</p>
+                                {broke || full ? <p className="hint">{broke ? "Not enough gold" : "Pouch full"}</p> : null}
                               </div>
+                              <span className="buy-chip">{broke || full ? "Closed" : "Buy"}</span>
                             </button>
                           );
                         })}
@@ -378,7 +460,11 @@ export function Delve() {
                 const targetable = Boolean(pick && (pick.need === "any-hero" || (pick.need === "ally" && !hero.down)));
                 const hit = floats(`hero:${hero.id}`).some((f) => f.kind === "dmg");
                 const acting = run.phase === "battle" && actorHero?.id === hero.id;
-                const className = `stand class-${hero.classId}${hero.down ? " is-down" : ""}${acting ? " is-actor" : ""}${targetable ? " is-target" : ""}${hit ? " is-hit" : ""}`;
+                const aimed = run.enemies.find((enemy) => enemy.uid === aim && revealsTarget(enemy));
+                const marked = Boolean(aimed && (aimed.intentTargetId === "all" || aimed.intentTargetId === hero.id));
+                const threats = incomingOn(run, hero.id);
+                const hunted = threats.some((mark) => mark.hunt);
+                const className = `stand class-${hero.classId}${hero.down ? " is-down" : ""}${acting ? " is-actor" : ""}${targetable ? " is-target" : ""}${hit ? " is-hit" : ""}${marked ? " is-aimed" : ""}${hunted ? " is-hunted" : ""}`;
                 const slots = run.phase === "equip" ? slotsFor(run, hero) : null;
                 const pending = run.pendingRelic ? RELICS[run.pendingRelic] : undefined;
                 const wrongClass = Boolean(pending?.classes?.length && !pending.classes.includes(hero.classId));
@@ -388,21 +474,23 @@ export function Delve() {
                     <StandArt src={`/figures/hero-${hero.classId}.png`} mark={<ClassMark classId={hero.classId} />} />
                     <div className="stand-plate">
                       {acting ? <p className="turn-flag">Your turn</p> : null}
-                      <p className={`chip-name${acting ? " is-turn" : ""}`}>
-                        {hero.name}
-                        {hero.down ? " · Down" : ""}
-                      </p>
-                      {acting ? (
-                        <p className="hint">
-                          {hero.hp}/{hero.maxHp}
-                          {hero.maxMana > 0 ? ` · Mana ${hero.mana}/${hero.maxMana}` : ""}
-                          {run.playsLeft > 1 ? " · plays twice" : ""}
-                        </p>
+                      <p className={`chip-name${acting ? " is-turn" : ""}`}>{hero.down ? `${hero.name} · Down` : hero.name}</p>
+                      <HpReadout hp={hero.hp} maxHp={hero.maxHp} poison={hero.poison} shield={hero.block} />
+                      {threats.length > 0 || hunted ? (
+                        <div className="threat-row">
+                          {threats.map((mark) => (
+                            <span key={mark.uid} className={`threat-badge foe-${mark.defId}`}>
+                              ⚔ {mark.damage}
+                              {mark.poison > 0 ? ` + P${mark.poison}` : ""}
+                            </span>
+                          ))}
+                          {hunted ? <span className="hunted-mark">Hunted</span> : null}
+                        </div>
                       ) : null}
-                      <VitalBar hp={hero.hp} maxHp={hero.maxHp} poison={hero.poison} shield={hero.block} />
                       <ManaBar mana={hero.mana} max={hero.maxMana} />
                       <p className="hint">
                         ATK {hero.atk + hero.atkBuff} · DEF {hero.def + hero.defBuff}
+                        {hero.maxMana > 0 ? ` · Mana ${hero.mana}` : ""}
                         {hero.block > 0 ? ` · Block ${hero.block}` : ""}
                         {hero.poison > 0 ? ` · Poison ${hero.poison}` : ""}
                         {storeCapOf(hero) > 0 ? (
@@ -410,7 +498,6 @@ export function Delve() {
                             {` · Stored ${hero.stored}/${storeCapOf(hero)}`}
                           </span>
                         ) : null}
-                        {!acting && hero.maxMana > 0 ? ` · Mana ${hero.mana}/${hero.maxMana}` : ""}
                       </p>
                       {run.phase === "prep" && !hero.down && !targetable ? (
                         <button
@@ -430,7 +517,10 @@ export function Delve() {
                           onClick={() => {
                             if (wrongClass) return;
                             if (slots.free > 0) equipRelic(hero.id, null);
-                            else setReplacing(hero.id);
+                            else {
+                              setReplaceId(null);
+                              setReplacing(hero.id);
+                            }
                           }}
                         >
                           {wrongClass ? "Not their art" : slots.free > 0 ? "Wear" : "Full"}
@@ -460,7 +550,7 @@ export function Delve() {
                     <StandArt src="/figures/minion-thrall.png" mark={<GameIcon name="skull" />} />
                     <div className="stand-plate">
                       <p className="chip-name">{minion.name}</p>
-                      <VitalBar hp={minion.hp} maxHp={minion.maxHp} poison={0} shield={0} />
+                      <HpReadout hp={minion.hp} maxHp={minion.maxHp} poison={0} shield={0} />
                       <p className="hint">ATK {minion.atk}</p>
                     </div>
                   </div>
@@ -525,6 +615,11 @@ export function Delve() {
               ) : null}
               <span className="turn-note">{run.playsLeft > 1 ? "plays twice" : "your cards"}</span>
             </div>
+            {pick?.source === "card" ? (
+              <PickBar label={pickLabel} need={pick.need} onPlay={() => commitPick(null)} onCancel={() => setPick(null)} />
+            ) : (
+              <p className="hint hand-hint">Tap a card, then confirm. Or end the turn.</p>
+            )}
             <div className="h-scroll deal">
               {run.hand.map((card, i) => {
                 const def = CARDS[card.cardId];
@@ -557,11 +652,6 @@ export function Delve() {
                 );
               })}
             </div>
-            {pick?.source === "card" ? (
-              <PickBar label={pickLabel} need={pick.need} onPlay={() => commitPick(null)} onCancel={() => setPick(null)} />
-            ) : (
-              <p className="hint">Tap a card, then confirm. Or end the turn.</p>
-            )}
             <button
               type="button"
               className="btn btn-ghost"
@@ -586,13 +676,26 @@ export function Delve() {
           <>
             {replacing ? (
               <div className="inline-actions">
-                <p className="hint">Replace one of {run.party.find((h) => h.id === replacing)?.name}'s delve relics.</p>
-                {(run.equipped[replacing] ?? []).map((id) => (
-                  <button key={id} type="button" className="btn btn-tiny btn-ghost" onClick={() => equipRelic(replacing, id)}>
-                    Replace {RELICS[id]?.name}
-                  </button>
-                ))}
-                <button type="button" className="btn btn-tiny btn-ghost" onClick={() => setReplacing(null)}>
+                <p className="hint">Tap the relic to replace, then confirm. The new one is marked New.</p>
+                <button
+                  type="button"
+                  className="btn btn-gold"
+                  data-testid="confirm-replace"
+                  disabled={!replaceId}
+                  onClick={() => {
+                    if (replaceId) equipRelic(replacing, replaceId);
+                  }}
+                >
+                  Replace it
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => {
+                    setReplacing(null);
+                    setReplaceId(null);
+                  }}
+                >
                   Back
                 </button>
               </div>
@@ -655,18 +758,107 @@ export function Delve() {
         ) : null}
       </footer>
 
+      {detailId && run.phase === "treasure" ? (
+        <RelicDetail
+          defId={run.offer.find((offer) => offer.uid === detailId)?.defId ?? ""}
+          onClose={() => setDetailId(null)}
+          onClaim={() => {
+            chooseRelic(detailId);
+            setDetailId(null);
+          }}
+        />
+      ) : null}
       {abandonAsk ? (
         <div className="overlay" role="presentation" onClick={() => askAbandon(false)}>
           <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="flee-title" onClick={(e) => e.stopPropagation()}>
-            <h2 id="flee-title">Flee the delve?</h2>
-            <p>Experience already earned stays with the guild. Relics from this delve do not.</p>
-            <div className="inline-actions">
-              <button type="button" className="btn btn-blood" onClick={abandon}>
-                Flee
+            <header className="sheet-head">
+              <h2 id="flee-title">Flee the delve?</h2>
+              <button type="button" className="sheet-x" aria-label="Close" onClick={() => askAbandon(false)}>
+                ✕
               </button>
-              <button type="button" className="btn btn-ghost" onClick={() => askAbandon(false)}>
-                Stay
+            </header>
+            <div className="sheet-body">
+              <p>Experience already earned stays with the guild. Relics from this delve do not.</p>
+              <div className="inline-actions">
+                <button type="button" className="btn btn-blood" onClick={abandon}>
+                  Flee
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => askAbandon(false)}>
+                  Stay
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {menu ? (
+        <div className="overlay" role="presentation" onClick={() => setMenu(false)}>
+          <div
+            className="sheet menu-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="menu-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="sheet-head">
+              <h2 id="menu-title">Menu</h2>
+              <button type="button" className="sheet-x" aria-label="Close" onClick={() => setMenu(false)}>
+                ✕
               </button>
+            </header>
+            <div className="sheet-body">
+              <div className="menu-list">
+                <button
+                  type="button"
+                  className="menu-row"
+                  onClick={() => {
+                    setMenu(false);
+                    setGear(true);
+                  }}
+                >
+                  Gear
+                </button>
+                <button
+                  type="button"
+                  className="menu-row"
+                  onClick={() => {
+                    setMenu(false);
+                    setCodex(true);
+                  }}
+                >
+                  Items
+                </button>
+                <button
+                  type="button"
+                  className="menu-row"
+                  onClick={() => {
+                    setMenu(false);
+                    openRules(true);
+                  }}
+                >
+                  Rules
+                </button>
+                <button
+                  type="button"
+                  className="menu-row"
+                  onClick={() => {
+                    toggleMute();
+                    setMenu(false);
+                  }}
+                >
+                  {mute ? "Sound off" : "Sound on"}
+                </button>
+                <button
+                  type="button"
+                  className="menu-row"
+                  onClick={() => {
+                    setMenu(false);
+                    askAbandon(true);
+                  }}
+                >
+                  Flee
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -683,11 +875,36 @@ function DoorArt({ kind }: { kind: string }) {
   return (
     <img
       className="door-art"
-      src={`/doors/door-${kind}.jpg`}
+      src={`/doors/door-${kind}.${kind === "campfire" ? "png" : "jpg"}`}
       alt=""
       draggable={false}
       onError={() => setFailed(true)}
     />
+  );
+}
+
+function HpReadout({
+  hp,
+  maxHp,
+  poison,
+  bleed = 0,
+  shield,
+  foe,
+}: {
+  hp: number;
+  maxHp: number;
+  poison: number;
+  bleed?: number;
+  shield: number;
+  foe?: boolean;
+}) {
+  return (
+    <div className="hp-readout">
+      <p className="hp-num">
+        {hp}/{maxHp}
+      </p>
+      <VitalBar hp={hp} maxHp={maxHp} poison={poison} bleed={bleed} shield={shield} foe={foe} />
+    </div>
   );
 }
 
@@ -729,6 +946,42 @@ function VitalBar({
   );
 }
 
+function RelicDetail({ defId, onClose, onClaim }: { defId: string; onClose: () => void; onClaim: () => void }) {
+  const relic = RELICS[defId];
+  if (!relic) return null;
+  return (
+    <div className="overlay" role="presentation" onClick={onClose}>
+      <div
+        className={`sheet relic-detail is-${relic.rarity}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="relic-detail-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="sheet-head">
+          <div>
+            <p className="kicker">{relic.rarity}</p>
+            <h2 id="relic-detail-title">{relic.name}</h2>
+          </div>
+          <button type="button" className="sheet-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+        <div className="sheet-body">
+          <img className="relic-detail-art" src={`/relics/${relic.id}.png`} alt="" />
+          {relic.classes?.length ? (
+            <p className="hint">{relic.classes.map((id) => CLASSES[id]?.name ?? id).join(", ")}</p>
+          ) : null}
+          <p>{relic.text}</p>
+          <button type="button" className="btn btn-gold" data-testid="claim-relic" onClick={onClaim}>
+            Claim
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ManaBar({ mana, max }: { mana: number; max: number }) {
   if (max <= 0) return null;
   return (
@@ -738,9 +991,14 @@ function ManaBar({ mana, max }: { mana: number; max: number }) {
   );
 }
 
-function PhaseFlash({ form }: { form: number }) {
-  if (form <= 1) return null;
-  return <span key={form} className="phase-flash" aria-hidden />;
+function PhaseFlash({ form, staggered }: { form: number; staggered: boolean }) {
+  if (form <= 1 && !staggered) return null;
+  return (
+    <>
+      {form > 1 ? <span key={form} className="phase-flash" aria-hidden /> : null}
+      {staggered ? <span key={`stag-${form}`} className="stagger-flash" aria-hidden /> : null}
+    </>
+  );
 }
 
 function StandArt({ src, mark }: { src: string; mark: ReactNode }) {
@@ -764,7 +1022,7 @@ function PickBar({
   const prompt =
     need === "enemy" ? `Choose a foe for ${label}` : need === "none" ? `Play ${label}` : `Choose a hero for ${label}`;
   return (
-    <div className="inline-actions">
+    <div className="inline-actions pick-bar">
       {need === "none" ? (
         <button type="button" className="btn btn-gold" onClick={onPlay}>
           {prompt}

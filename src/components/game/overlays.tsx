@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CARDS, CLASSES, RELICS, RELIC_SLOTS, SUPPLIES, SUPPLY_COST, TREASURE_DECKS, computeStats, deckFor, relicCost, relicEffects, relicIdsOf, xpThreshold, LEVEL_CAP } from "@/game/content";
+import { CARDS, CLASSES, RELICS, RELIC_SLOTS, SUPPLIES, SUPPLY_COST, TREASURE_DECKS, computeStats, deckFor, isCampHealSupply, relicCost, relicEffects, relicIdsOf, xpThreshold, LEVEL_CAP } from "@/game/content";
 import { useGame } from "@/game/store";
 import { ClassMark } from "./cards";
 
@@ -17,8 +17,16 @@ export function Rules() {
         aria-labelledby="rules-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="kicker">Rules</p>
-        <h2 id="rules-title">How a delve works</h2>
+        <header className="sheet-head">
+          <div>
+            <p className="kicker">Rules</p>
+            <h2 id="rules-title">How a delve works</h2>
+          </div>
+          <button type="button" className="sheet-x" aria-label="Close" onClick={() => openRules(false)}>
+            ✕
+          </button>
+        </header>
+        <div className="sheet-body">
         <h3>The goal</h3>
         <p>Break three seals by defeating mini-bosses, then survive the Hollow King. Wipe, and the delve ends. Levels stay.</p>
         <h3>Doors</h3>
@@ -37,6 +45,10 @@ export function Rules() {
           <li>Heroes act in seat order. Each plays one card from three drawn.</li>
           <li>Damage is Attack + the card, then minus Armor (at least 1 if you connect).</li>
           <li>Incoming hits subtract Defense, then Block. Block clears after the monsters act.</li>
+          <li>
+            Before you act, each foe shows an arrow to the hero it will hit, or → All. A ? means that foe is hiding its
+            target. Challenge redirects every foe onto you.
+          </li>
           <li>Poison ticks at the start of the monster phase for foes, and after their strikes for heroes. It then drops by 1.</li>
           <li>At half a form, a boss rages — harder hits, sometimes the whole party.</li>
           <li>
@@ -99,6 +111,7 @@ export function Rules() {
           )}
         </div>
         <p className="hint">Disband resets levels, keepsakes, and unlocks on this device.</p>
+        </div>
       </div>
     </div>
   );
@@ -120,10 +133,19 @@ export function HeroSheet() {
   return (
     <div className="overlay" role="presentation" onClick={() => openSheet(null)}>
       <div className={`sheet class-${id}`} role="dialog" aria-modal="true" aria-labelledby="sheet-title" onClick={(e) => e.stopPropagation()}>
-        <div className="plate-top">
+        <header className="sheet-head">
           <div>
             <p className="kicker">{cls.role}</p>
             <h2 id="sheet-title">{hero.name}</h2>
+          </div>
+          <button type="button" className="sheet-x" aria-label="Close" onClick={() => openSheet(null)}>
+            ✕
+          </button>
+        </header>
+        <div className="sheet-body">
+        <div className="plate-top">
+          <div>
+            <p className="kicker">{cls.role}</p>
             <p>{cls.name}</p>
           </div>
           <ClassMark classId={id} />
@@ -168,6 +190,7 @@ export function HeroSheet() {
         <button type="button" className="btn btn-gold" onClick={() => openSheet(null)}>
           Close
         </button>
+        </div>
       </div>
     </div>
   );
@@ -210,8 +233,16 @@ export function GearBook({ onClose }: { onClose: () => void }) {
         data-testid="gear-sheet"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="kicker">Equipment</p>
-        <h2 id="gear-title">What you are wearing</h2>
+        <header className="sheet-head">
+          <div>
+            <p className="kicker">Equipment</p>
+            <h2 id="gear-title">What you are wearing</h2>
+          </div>
+          <button type="button" className="sheet-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+        <div className="sheet-body">
         <p>
           {run
             ? "Keepsakes came from a won delve. The other slots are relics from this one. Three pieces total."
@@ -241,6 +272,7 @@ export function GearBook({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn btn-gold" onClick={onClose}>
           Close
         </button>
+        </div>
       </div>
     </div>
   );
@@ -332,11 +364,16 @@ function signed(n: number): string {
 }
 
 export function ItemCodex({ onClose }: { onClose: () => void }) {
+  const run = useGame((s) => s.run);
+  const applySupply = useGame((s) => s.applySupply);
+  const [using, setUsing] = useState<string | null>(null);
   const supplies = Object.values(SUPPLIES);
   const groups = (["common", "rare", "mythic"] as const).map((rarity) => ({
     rarity,
     relics: [...new Set(TREASURE_DECKS[rarity])].map((id) => RELICS[id]).filter((relic) => Boolean(relic)),
   }));
+  const camp = run && (run.phase === "doors" || run.phase === "onward" || run.phase === "supply");
+  const pouch = camp ? run.supplies.filter((inst) => isCampHealSupply(SUPPLIES[inst.defId]!)) : [];
 
   return (
     <div className="overlay" role="presentation" onClick={onClose}>
@@ -348,8 +385,70 @@ export function ItemCodex({ onClose }: { onClose: () => void }) {
         data-testid="items-sheet"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="kicker">Codex</p>
-        <h2 id="items-title">Every item</h2>
+        <header className="sheet-head">
+          <div>
+            <p className="kicker">Codex</p>
+            <h2 id="items-title">Every item</h2>
+          </div>
+          <button type="button" className="sheet-x" aria-label="Close" onClick={onClose}>
+            ✕
+          </button>
+        </header>
+        <div className="sheet-body">
+        {camp ? (
+          <section>
+            <h3>Pouch</h3>
+            {pouch.length === 0 ? (
+              <p className="hint">No healing supplies to use between rooms.</p>
+            ) : (
+              pouch.map((inst) => {
+                const def = SUPPLIES[inst.defId]!;
+                const needsTarget = def.target === "ally" || def.target === "any-hero";
+                const targets = run.party.filter((hero) => def.target === "any-hero" || !hero.down);
+                return (
+                  <article key={inst.uid} className="codex-row">
+                    <img className="codex-art" src={`/supplies/${def.id}.png`} alt="" />
+                    <div>
+                      <p className="kicker">Between rooms</p>
+                      <h3 className="name font-display">{def.name}</h3>
+                      <p>{def.text}</p>
+                      {using === inst.uid && needsTarget ? (
+                        <div className="inline-actions">
+                          {targets.map((hero) => (
+                            <button
+                              key={hero.id}
+                              type="button"
+                              className="btn btn-tiny btn-gold"
+                              onClick={() => {
+                                applySupply(inst.uid, hero.id);
+                                setUsing(null);
+                              }}
+                            >
+                              {hero.name}
+                              {hero.down ? " · Down" : ""}
+                            </button>
+                          ))}
+                          <button type="button" className="btn btn-tiny btn-ghost" onClick={() => setUsing(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-tiny btn-gold"
+                          data-testid={`use-${def.id}`}
+                          onClick={() => (needsTarget ? setUsing(inst.uid) : applySupply(inst.uid, null))}
+                        >
+                          Use
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </section>
+        ) : null}
         <p>Supplies sit in the pouch. Relics are worn, three to a hero. The gold is what a stall charges.</p>
         <h3>Supplies</h3>
         {supplies.map((item) => (
@@ -382,6 +481,7 @@ export function ItemCodex({ onClose }: { onClose: () => void }) {
         <button type="button" className="btn btn-gold" onClick={onClose}>
           Close
         </button>
+        </div>
       </div>
     </div>
   );
